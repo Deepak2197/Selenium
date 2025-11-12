@@ -53,8 +53,6 @@ public class DamsDelhiLogin {
 
             setupDriver();
             login();
-
-            // Navigate to CBT section using hamburger menu
             navigateToCBTSectionViaHamburger();
 
             // Discover all CBT courses
@@ -73,7 +71,6 @@ public class DamsDelhiLogin {
 
                 processCBTCourse(courseName, i);
                 
-                // Return to CBT section after each course (except last)
                 if (i < cbtCourses.size() - 1) {
                     returnToCBTSection();
                 }
@@ -106,7 +103,6 @@ public class DamsDelhiLogin {
         options.addArguments("--disable-blink-features=AutomationControlled");
         options.addArguments("--disable-notifications");
         
-        // Check if running in CI mode
         String ciMode = System.getenv("CI");
         if ("true".equals(ciMode)) {
             System.out.println("Running in CI mode (headless)");
@@ -133,7 +129,6 @@ public class DamsDelhiLogin {
         driver.get("https://www.damsdelhi.com/");
         sleep(3);
         
-        // Click Sign in button
         try {
             WebElement signInBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
                 By.xpath("//button[contains(text(), 'Sign in') or contains(text(), 'Sign In')]")));
@@ -159,7 +154,6 @@ public class DamsDelhiLogin {
         clickElement(By.className("common-bottom-btn"), "Request OTP");
         sleep(3);
         
-        // Handle logout popup
         try {
             WebElement logoutBtn = driver.findElement(
                 By.xpath("//button[contains(@class, 'btndata') and contains(text(), 'Logout')]"));
@@ -184,7 +178,6 @@ public class DamsDelhiLogin {
         System.out.println("Navigating to CBT section via Hamburger menu...");
         
         try {
-            // Step 1: Click the course dropdown button to select NEET PG
             try {
                 WebElement dropdown = wait.until(ExpectedConditions.presenceOfElementLocated(
                     By.xpath("//button[contains(@class, 'SelectCat')]")));
@@ -197,7 +190,6 @@ public class DamsDelhiLogin {
                 System.out.println("  ⚠ Skipping dropdown: " + e.getMessage());
             }
             
-            // Step 2: Select NEET PG from dropdown
             try {
                 List<WebElement> options = driver.findElements(
                     By.xpath("//span[contains(text(), 'NEET PG')] | //div[contains(text(), 'NEET PG')]"));
@@ -213,7 +205,6 @@ public class DamsDelhiLogin {
                 System.out.println("  ⚠ Skipping NEET PG selection");
             }
             
-            // Step 3: Close any modal if present
             try {
                 WebElement closeBtn = driver.findElement(
                     By.xpath("//button[@type='button' and @aria-label='Close'] | //span[contains(@class, 'ant-modal-close')]"));
@@ -224,7 +215,6 @@ public class DamsDelhiLogin {
                 System.out.println("  ℹ No modal to close");
             }
             
-            // Step 4: Click Hamburger menu button
             boolean hamburgerClicked = false;
             try {
                 WebElement hamburger = wait.until(ExpectedConditions.presenceOfElementLocated(
@@ -244,9 +234,7 @@ public class DamsDelhiLogin {
                 return;
             }
             
-            // Step 5: Click CBT button in the sidebar
             boolean cbtClicked = false;
-            
             By[] cbtSelectors = {
                 By.xpath("//div[contains(@class, 'Categories')]//div[contains(text(), 'CBT')]"),
                 By.xpath("//div[contains(@class, 'Categories')]//*[contains(text(), 'CBT')]"),
@@ -261,7 +249,6 @@ public class DamsDelhiLogin {
                     for (WebElement cbtElem : cbtElements) {
                         if (cbtElem.isDisplayed()) {
                             String elemText = cbtElem.getText().trim();
-                            
                             if (elemText.equals("CBT") || elemText.equalsIgnoreCase("cbt")) {
                                 js.executeScript("arguments[0].scrollIntoView({block: 'center'});", cbtElem);
                                 sleep(1);
@@ -284,7 +271,6 @@ public class DamsDelhiLogin {
                 return;
             }
             
-            // Step 6: Click OK button (Red button) if it appears
             try {
                 WebElement okBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
                     By.xpath("//button[@type='button' and contains(@class, 'btn-danger') and contains(text(), 'OK')]")));
@@ -310,11 +296,9 @@ public class DamsDelhiLogin {
         List<String> courses = new ArrayList<>();
         
         try {
-            // CRITICAL FIX: Wait for page to fully load after navigation
             System.out.println("  → Waiting for CBT page to load completely...");
-            sleep(5); // Give time for JavaScript to render
+            sleep(5);
             
-            // Scroll to load all courses
             js.executeScript("window.scrollTo(0, 0);");
             sleep(2);
             
@@ -337,7 +321,6 @@ public class DamsDelhiLogin {
             js.executeScript("window.scrollTo(0, 0);");
             sleep(2);
             
-            // Find all Buy Now buttons - use the EXACT working selector
             List<WebElement> buyNowButtons = driver.findElements(
                 By.xpath("//button[@type='button' and contains(@class, 'butBtn') and contains(@class, 'modal_show')]"));
             
@@ -348,24 +331,19 @@ public class DamsDelhiLogin {
                 return courses;
             }
             
-            // CRITICAL FIX: Limit to EXACTLY 3 courses only
             int coursesToProcess = Math.min(3, buyNowButtons.size());
             System.out.println("  → Processing EXACTLY " + coursesToProcess + " courses (LIMITED TO 3)");
             
-            // For each button, find the course name
             for (int i = 0; i < coursesToProcess; i++) {
                 WebElement button = buyNowButtons.get(i);
                 try {
-                    // Scroll button into view
                     js.executeScript("arguments[0].scrollIntoView({block: 'center'});", button);
                     sleep(1);
                     
-                    // Navigate up to find the course container
                     WebElement container = button.findElement(By.xpath("./ancestor::div[contains(@class, 'col')]"));
                     
                     String courseName = "";
                     
-                    // Method 1: Look for heading tags (h3, h4, h5)
                     try {
                         WebElement titleElem = container.findElement(
                             By.xpath(".//h3 | .//h4 | .//h5 | .//*[contains(@class, 'title') or contains(@class, 'heading')]"));
@@ -373,7 +351,6 @@ public class DamsDelhiLogin {
                         System.out.println("  → Method 1: Found title: " + courseName);
                     } catch (Exception e) {}
                     
-                    // Method 2: Look for anchor with substantial text
                     if (courseName.isEmpty()) {
                         try {
                             WebElement linkElem = container.findElement(
@@ -383,7 +360,6 @@ public class DamsDelhiLogin {
                         } catch (Exception e) {}
                     }
                     
-                    // Method 3: Get all text and find first valid line
                     if (courseName.isEmpty()) {
                         String allText = container.getText();
                         String[] lines = allText.split("\n");
@@ -397,12 +373,10 @@ public class DamsDelhiLogin {
                         }
                     }
                     
-                    // Only add if valid course name found, otherwise use generic
                     if (!courseName.isEmpty() && isValidCBTCourseName(courseName)) {
                         courses.add(courseName);
                         System.out.println("  ✓ Found course: " + courseName);
                     } else {
-                        // Use generic name only as last resort
                         courseName = "CBT Course " + (i + 1);
                         courses.add(courseName);
                         System.out.println("  → Using generic name: " + courseName);
@@ -412,9 +386,7 @@ public class DamsDelhiLogin {
                 }
             }
             
-            // Remove duplicates while preserving order
             List<String> uniqueCourses = new ArrayList<>(new LinkedHashSet<>(courses));
-            
             return uniqueCourses;
             
         } catch (Exception e) {
@@ -429,7 +401,6 @@ public class DamsDelhiLogin {
         
         String lower = text.toLowerCase();
         
-        // Must contain relevant keywords
         if (!lower.contains("all india") && !lower.contains("dams") && 
             !lower.contains("neet") && !lower.contains("mds") && 
             !lower.contains("fmge") && !lower.contains("combo") && 
@@ -437,7 +408,6 @@ public class DamsDelhiLogin {
             return false;
         }
         
-        // Filter out invalid terms
         String[] invalid = {
             "test instructions", "buy now", "registration", "exam date", 
             "noida", "delhi", "select", "choose", "click here", "view details",
@@ -460,7 +430,6 @@ public class DamsDelhiLogin {
         String errorMsg = null;
         
         try {
-            // Step 1: Find and click the specific Buy Now button
             List<WebElement> buyButtons = driver.findElements(
                 By.xpath("//button[contains(@class, 'butBtn') and contains(@class, 'modal_show')]"));
             
@@ -475,7 +444,6 @@ public class DamsDelhiLogin {
                 throw new Exception("Buy button not found for index " + courseIndex);
             }
             
-            // Step 1.5: Handle CBT (Center Based Test) Modal
             try {
                 WebElement cbtModal = wait.until(ExpectedConditions.visibilityOfElementLocated(
                     By.xpath("//div[@class='popup' and .//div[@id='cbt_hide']]")));
@@ -497,7 +465,6 @@ public class DamsDelhiLogin {
                 System.out.println("  ℹ CBT Modal skipped");
             }
             
-            // Step 2: Click Flex button
             try {
                 WebElement flexBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
                     By.xpath("//button[contains(@class, 'show_data_city')]")));
@@ -510,7 +477,6 @@ public class DamsDelhiLogin {
                 System.out.println("  ℹ Flex button skipped");
             }
             
-            // Step 3: Select Delhi
             try {
                 WebElement delhiBtn = driver.findElement(
                     By.xpath("//button[contains(text(), 'Delhi') or contains(@data-city, 'Delhi')]"));
@@ -521,7 +487,6 @@ public class DamsDelhiLogin {
                 System.out.println("  ℹ Delhi selection skipped");
             }
             
-            // Step 4: Click Red Button (Place Order)
             try {
                 WebElement redBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
                     By.xpath("//button[contains(@class, 'btn-danger') and contains(@class, 'btn-block')]")));
@@ -534,7 +499,6 @@ public class DamsDelhiLogin {
                 System.out.println("  ⚠ Red button not found");
             }
             
-            // Step 5: Select Paytm
             try {
                 WebElement paytm = null;
                 By[] paytmSelectors = {
@@ -562,7 +526,6 @@ public class DamsDelhiLogin {
                 System.out.println("  ℹ Paytm selection skipped");
             }
             
-            // Step 6: Click Payment button
             try {
                 WebElement paymentBtn = null;
                 By[] paymentSelectors = {
@@ -589,7 +552,6 @@ public class DamsDelhiLogin {
                 System.out.println("  ⚠ Payment button issue");
             }
             
-            // Step 7: Wait for QR code
             System.out.println("  ⏳ Step 7: Waiting for QR code (max 60s)...");
             WebDriverWait qrWait = new WebDriverWait(driver, Duration.ofSeconds(60));
             
@@ -602,7 +564,6 @@ public class DamsDelhiLogin {
                 System.out.println("  ⚠ QR wait timeout");
             }
             
-            // Step 8: Capture screenshot
             String fileTimestamp = fileFormat.format(new Date());
             String filename = "screenshots/CBT_QR_" + courseName.replaceAll("[^a-zA-Z0-9]", "_") + 
                             "_" + fileTimestamp + ".png";
@@ -612,7 +573,6 @@ public class DamsDelhiLogin {
             screenshotPath = filename;
             System.out.println("  ✓ Step 8: Screenshot saved: " + filename);
             
-            // Step 9: Close payment window
             closePaymentWindow();
             System.out.println("  ✓ Step 9: Closed payment window");
             
@@ -678,7 +638,6 @@ public class DamsDelhiLogin {
                 return;
             }
             
-            // Click OK button
             try {
                 WebElement okBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
                     By.xpath("//button[@type='button' and contains(@class, 'btn-danger') and contains(text(), 'OK')]")));
@@ -712,7 +671,6 @@ public class DamsDelhiLogin {
                 } catch (Exception e) {}
             }
             
-            // Skip feedback
             By[] skipSelectors = {
                 By.xpath("//button[contains(@class, 'ptm-feedback-btn') and contains(text(), 'Skip')]"),
                 By.xpath("//button[contains(text(), 'Skip')]")
@@ -727,7 +685,6 @@ public class DamsDelhiLogin {
                 } catch (Exception e) {}
             }
             
-            // Close modals
             By[] modalSelectors = {
                 By.xpath("//span[contains(@class, 'ant-modal-close-x')]"),
                 By.xpath("//button[contains(@class, 'ant-modal-close')]")
@@ -789,11 +746,14 @@ public class DamsDelhiLogin {
             String timestamp = fileFormat.format(new Date());
             String filename = "DAMS_CBT_Report_" + timestamp + ".html";
             
+            double successRate = courseResults.isEmpty() ? 0 : 
+                (totalSuccessful * 100.0 / courseResults.size());
+            
             StringBuilder html = new StringBuilder();
             html.append("<!DOCTYPE html>\n<html>\n<head>\n");
             html.append("<meta charset='UTF-8'>\n");
             html.append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>\n");
-            html.append("<title>DAMS CBT Automation Report</title>\n");
+            html.append("<title>DAMS CBT Automation Report - ").append(timestamp).append("</title>\n");
             html.append("<style>\n");
             html.append("* { margin: 0; padding: 0; box-sizing: border-box; }\n");
             html.append("body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 40px 20px; }\n");
@@ -801,61 +761,102 @@ public class DamsDelhiLogin {
             html.append(".header { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); text-align: center; }\n");
             html.append(".header h1 { color: #2d3748; font-size: 42px; font-weight: 700; margin-bottom: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }\n");
             html.append(".header .subtitle { color: #718096; font-size: 16px; margin-top: 5px; }\n");
+            html.append(".header .timestamp { color: #a0aec0; font-size: 14px; margin-top: 10px; font-weight: 600; }\n");
             html.append(".summary { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); }\n");
             html.append(".summary h2 { color: #2d3748; font-size: 28px; font-weight: 600; margin-bottom: 25px; }\n");
             html.append(".stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 25px; }\n");
             html.append(".stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 15px; box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4); }\n");
-            html.append(".stat-card .label { font-size: 14px; opacity: 0.9; margin-bottom: 10px; }\n");
+            html.append(".stat-card .label { font-size: 14px; opacity: 0.9; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }\n");
             html.append(".stat-card .value { font-size: 48px; font-weight: 700; }\n");
             html.append(".stat-card.success { background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); }\n");
             html.append(".stat-card.failed { background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%); }\n");
+            html.append(".stat-card.rate { background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%); }\n");
+            html.append(".info-section { background: #f7fafc; border-left: 4px solid #667eea; padding: 20px; border-radius: 10px; margin-top: 20px; }\n");
+            html.append(".info-section p { color: #4a5568; margin: 8px 0; line-height: 1.6; }\n");
+            html.append(".info-section strong { color: #2d3748; }\n");
             html.append(".results { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); }\n");
             html.append(".results h2 { color: #2d3748; font-size: 28px; font-weight: 600; margin-bottom: 25px; }\n");
-            html.append("table { width: 100%; border-collapse: collapse; }\n");
+            html.append(".table-wrapper { overflow-x: auto; }\n");
+            html.append("table { width: 100%; border-collapse: collapse; min-width: 800px; }\n");
             html.append("thead { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }\n");
-            html.append("th { padding: 15px; text-align: left; font-weight: 600; }\n");
-            html.append("tbody tr { border-bottom: 1px solid #e2e8f0; transition: background 0.3s; }\n");
-            html.append("tbody tr:hover { background: #f7fafc; }\n");
-            html.append("td { padding: 15px; }\n");
-            html.append(".status-badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }\n");
+            html.append("th { padding: 15px; text-align: left; font-weight: 600; text-transform: uppercase; font-size: 12px; letter-spacing: 1px; }\n");
+            html.append("tbody tr { border-bottom: 1px solid #e2e8f0; transition: all 0.3s; }\n");
+            html.append("tbody tr:hover { background: #f7fafc; transform: scale(1.01); }\n");
+            html.append("td { padding: 15px; vertical-align: top; }\n");
+            html.append(".course-name { font-weight: 600; color: #2d3748; max-width: 400px; }\n");
+            html.append(".status-badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; }\n");
             html.append(".status-success { background: #c6f6d5; color: #22543d; }\n");
             html.append(".status-failed { background: #fed7d7; color: #742a2a; }\n");
-            html.append(".screenshot-link { color: #667eea; text-decoration: none; font-weight: 600; }\n");
-            html.append(".screenshot-link:hover { text-decoration: underline; }\n");
-            html.append(".error-msg { color: #e53e3e; font-size: 12px; font-style: italic; }\n");
+            html.append(".screenshot-link { color: #667eea; text-decoration: none; font-weight: 600; padding: 8px 16px; background: #edf2f7; border-radius: 8px; display: inline-block; transition: all 0.3s; }\n");
+            html.append(".screenshot-link:hover { background: #667eea; color: white; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); }\n");
+            html.append(".error-msg { color: #e53e3e; font-size: 12px; font-style: italic; background: #fff5f5; padding: 8px 12px; border-radius: 6px; display: inline-block; max-width: 300px; }\n");
+            html.append(".no-data { color: #a0aec0; font-style: italic; }\n");
+            html.append(".timestamp-cell { color: #718096; font-size: 13px; white-space: nowrap; }\n");
+            html.append(".index-cell { font-weight: 700; color: #667eea; font-size: 16px; }\n");
             html.append(".footer { text-align: center; color: white; margin-top: 40px; padding: 20px; }\n");
+            html.append(".footer p { opacity: 0.9; margin: 5px 0; }\n");
+            html.append(".print-data { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); }\n");
+            html.append(".print-data h2 { color: #2d3748; font-size: 28px; font-weight: 600; margin-bottom: 25px; }\n");
+            html.append(".print-item { background: #f7fafc; padding: 15px 20px; margin: 10px 0; border-radius: 10px; border-left: 4px solid #667eea; }\n");
+            html.append(".print-item .key { color: #667eea; font-weight: 600; margin-right: 10px; }\n");
+            html.append(".print-item .value { color: #2d3748; }\n");
+            html.append("@media print { body { background: white; } .container { max-width: 100%; } }\n");
             html.append("@media (max-width: 768px) {\n");
             html.append("  .header h1 { font-size: 32px; }\n");
-            html.append("  .summary, .results { padding: 25px 20px; }\n");
+            html.append("  .summary, .results, .print-data { padding: 25px 20px; }\n");
+            html.append("  .stat-card .value { font-size: 36px; }\n");
             html.append("  table { font-size: 14px; }\n");
             html.append("  th, td { padding: 10px; }\n");
             html.append("}\n");
             html.append("</style>\n</head>\n<body>\n");
+            
             html.append("<div class='container'>\n");
             html.append("<div class='header'>\n");
             html.append("<h1>🎯 DAMS CBT Automation Report</h1>\n");
             html.append("<p class='subtitle'>Comprehensive CBT Course Purchase Summary</p>\n");
+            html.append("<p class='timestamp'>Generated: ").append(new SimpleDateFormat("dd MMM yyyy, HH:mm:ss").format(new Date())).append("</p>\n");
             html.append("</div>\n");
+            
             html.append("<div class='summary'>\n");
             html.append("<h2>📊 Execution Summary</h2>\n");
             html.append("<div class='stats-grid'>\n");
+            
             html.append("<div class='stat-card'>\n");
-            html.append("<div class='label'>Total Courses Attempted</div>\n");
+            html.append("<div class='label'>Total Courses</div>\n");
             html.append("<div class='value'>").append(courseResults.size()).append("</div>\n");
             html.append("</div>\n");
+            
             html.append("<div class='stat-card success'>\n");
-            html.append("<div class='label'>Successful Purchases</div>\n");
+            html.append("<div class='label'>Successful</div>\n");
             html.append("<div class='value'>").append(totalSuccessful).append("</div>\n");
             html.append("</div>\n");
+            
             html.append("<div class='stat-card failed'>\n");
-            html.append("<div class='label'>Failed Attempts</div>\n");
+            html.append("<div class='label'>Failed</div>\n");
             html.append("<div class='value'>").append(totalFailed).append("</div>\n");
             html.append("</div>\n");
+            
+            html.append("<div class='stat-card rate'>\n");
+            html.append("<div class='label'>Success Rate</div>\n");
+            html.append("<div class='value'>").append(String.format("%.1f", successRate)).append("%</div>\n");
             html.append("</div>\n");
-            html.append("<p style='margin-top: 20px; color: #4a5568;'><strong>Execution Time:</strong> " + executionStartTime + "</p>\n");
+            
             html.append("</div>\n");
+            
+            html.append("<div class='info-section'>\n");
+            html.append("<p><strong>📅 Execution Start Time:</strong> ").append(executionStartTime).append("</p>\n");
+            html.append("<p><strong>🌐 Website:</strong> https://www.damsdelhi.com/</p>\n");
+            html.append("<p><strong>📱 Phone Number:</strong> +919456628016</p>\n");
+            html.append("<p><strong>🔐 OTP Used:</strong> 2000</p>\n");
+            html.append("<p><strong>🎓 Course Type:</strong> NEET PG - CBT (Center Based Test)</p>\n");
+            html.append("<p><strong>📍 Selected City:</strong> Delhi</p>\n");
+            html.append("<p><strong>💳 Payment Method:</strong> Paytm</p>\n");
+            html.append("</div>\n");
+            html.append("</div>\n");
+            
             html.append("<div class='results'>\n");
-            html.append("<h2>📋 Detailed Results</h2>\n");
+            html.append("<h2>📋 Detailed Course Results</h2>\n");
+            html.append("<div class='table-wrapper'>\n");
             html.append("<table>\n");
             html.append("<thead>\n");
             html.append("<tr>\n");
@@ -864,7 +865,7 @@ public class DamsDelhiLogin {
             html.append("<th>Status</th>\n");
             html.append("<th>Time</th>\n");
             html.append("<th>Screenshot</th>\n");
-            html.append("<th>Error</th>\n");
+            html.append("<th>Error Details</th>\n");
             html.append("</tr>\n");
             html.append("</thead>\n");
             html.append("<tbody>\n");
@@ -872,20 +873,27 @@ public class DamsDelhiLogin {
             for (int i = 0; i < courseResults.size(); i++) {
                 CourseResult result = courseResults.get(i);
                 html.append("<tr>\n");
-                html.append("<td>").append(i + 1).append("</td>\n");
-                html.append("<td>").append(result.courseName).append("</td>\n");
+                html.append("<td class='index-cell'>").append(i + 1).append("</td>\n");
+                html.append("<td class='course-name'>").append(escapeHtml(result.courseName)).append("</td>\n");
+                
                 String statusClass = result.status.equals("SUCCESS") ? "status-success" : "status-failed";
-                html.append("<td><span class='status-badge ").append(statusClass).append("'>").append(result.status).append("</span></td>\n");
-                html.append("<td>").append(result.timestamp).append("</td>\n");
-                if (result.screenshotPath != null) {
-                    html.append("<td><a href='").append(result.screenshotPath).append("' class='screenshot-link' target='_blank'>View QR</a></td>\n");
+                String statusIcon = result.status.equals("SUCCESS") ? "✅" : "❌";
+                html.append("<td><span class='status-badge ").append(statusClass).append("'>")
+                    .append(statusIcon).append(" ").append(result.status).append("</span></td>\n");
+                
+                html.append("<td class='timestamp-cell'>").append(result.timestamp).append("</td>\n");
+                
+                if (result.screenshotPath != null && !result.screenshotPath.isEmpty()) {
+                    html.append("<td><a href='").append(result.screenshotPath)
+                        .append("' class='screenshot-link' target='_blank'>🖼️ View QR Code</a></td>\n");
                 } else {
-                    html.append("<td>-</td>\n");
+                    html.append("<td class='no-data'>No screenshot</td>\n");
                 }
-                if (result.errorMessage != null) {
-                    html.append("<td><span class='error-msg'>").append(result.errorMessage).append("</span></td>\n");
+                
+                if (result.errorMessage != null && !result.errorMessage.isEmpty()) {
+                    html.append("<td><span class='error-msg'>⚠️ ").append(escapeHtml(result.errorMessage)).append("</span></td>\n");
                 } else {
-                    html.append("<td>-</td>\n");
+                    html.append("<td class='no-data'>-</td>\n");
                 }
                 html.append("</tr>\n");
             }
@@ -893,9 +901,65 @@ public class DamsDelhiLogin {
             html.append("</tbody>\n");
             html.append("</table>\n");
             html.append("</div>\n");
-            html.append("<div class='footer'>\n");
-            html.append("<p>Generated by DAMS CBT Automation System | Powered by Selenium WebDriver</p>\n");
             html.append("</div>\n");
+            
+            html.append("<div class='print-data'>\n");
+            html.append("<h2>📄 Complete Data Dump</h2>\n");
+            
+            html.append("<div class='print-item'>\n");
+            html.append("<span class='key'>Total Courses Processed:</span>\n");
+            html.append("<span class='value'>").append(courseResults.size()).append("</span>\n");
+            html.append("</div>\n");
+            
+            html.append("<div class='print-item'>\n");
+            html.append("<span class='key'>Successful Purchases:</span>\n");
+            html.append("<span class='value'>").append(totalSuccessful).append("</span>\n");
+            html.append("</div>\n");
+            
+            html.append("<div class='print-item'>\n");
+            html.append("<span class='key'>Failed Purchases:</span>\n");
+            html.append("<span class='value'>").append(totalFailed).append("</span>\n");
+            html.append("</div>\n");
+            
+            html.append("<div class='print-item'>\n");
+            html.append("<span class='key'>Success Rate:</span>\n");
+            html.append("<span class='value'>").append(String.format("%.2f%%", successRate)).append("</span>\n");
+            html.append("</div>\n");
+            
+            html.append("<div class='print-item'>\n");
+            html.append("<span class='key'>Execution Start:</span>\n");
+            html.append("<span class='value'>").append(executionStartTime).append("</span>\n");
+            html.append("</div>\n");
+            
+            html.append("<div class='print-item'>\n");
+            html.append("<span class='key'>Report Generated:</span>\n");
+            html.append("<span class='value'>").append(timestamp).append("</span>\n");
+            html.append("</div>\n");
+            
+            for (int i = 0; i < courseResults.size(); i++) {
+                CourseResult result = courseResults.get(i);
+                html.append("<div class='print-item'>\n");
+                html.append("<span class='key'>Course ").append(i + 1).append(":</span>\n");
+                html.append("<span class='value'>").append(escapeHtml(result.courseName)).append("</span><br>\n");
+                html.append("<span class='key'>Status:</span> <span class='value'>").append(result.status).append("</span><br>\n");
+                html.append("<span class='key'>Time:</span> <span class='value'>").append(result.timestamp).append("</span><br>\n");
+                if (result.screenshotPath != null) {
+                    html.append("<span class='key'>Screenshot:</span> <span class='value'>").append(result.screenshotPath).append("</span><br>\n");
+                }
+                if (result.errorMessage != null) {
+                    html.append("<span class='key'>Error:</span> <span class='value'>").append(escapeHtml(result.errorMessage)).append("</span>\n");
+                }
+                html.append("</div>\n");
+            }
+            
+            html.append("</div>\n");
+            
+            html.append("<div class='footer'>\n");
+            html.append("<p>🤖 Generated by DAMS CBT Automation System</p>\n");
+            html.append("<p>⚡ Powered by Selenium WebDriver</p>\n");
+            html.append("<p>📧 All rights reserved © 2024</p>\n");
+            html.append("</div>\n");
+            
             html.append("</div>\n");
             html.append("</body>\n</html>");
             
@@ -904,9 +968,23 @@ public class DamsDelhiLogin {
             writer.close();
             
             System.out.println("✓ Detailed report saved: " + filename);
+            System.out.println("  → Total Courses: " + courseResults.size());
+            System.out.println("  → Successful: " + totalSuccessful);
+            System.out.println("  → Failed: " + totalFailed);
+            System.out.println("  → Success Rate: " + String.format("%.2f%%", successRate));
             
         } catch (Exception e) {
             System.out.println("✗ Report generation failed: " + e.getMessage());
+            e.printStackTrace();
         }
+    }
+
+    private static String escapeHtml(String text) {
+        if (text == null) return "";
+        return text.replace("&", "&amp;")
+                   .replace("<", "&lt;")
+                   .replace(">", "&gt;")
+                   .replace("\"", "&quot;")
+                   .replace("'", "&#39;");
     }
 }
