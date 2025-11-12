@@ -52,6 +52,11 @@ jobs:
           echo ""
           echo "=== Java Version ==="
           java -version
+          echo ""
+          echo "=== Testing Chrome in Headless Mode ==="
+          google-chrome --headless --disable-gpu --dump-dom https://www.google.com | head -n 5
+          echo ""
+          echo "✓ Chrome headless test successful"
           
       - name: 📦 Download Selenium JARs - COMPLETE SET
         run: |
@@ -136,6 +141,58 @@ jobs:
             ls -la compiled/
           else
             echo "✗ Compilation failed"
+            exit 1
+          fi
+          
+      - name: 🧪 Test Chrome Setup
+        run: |
+          echo "Testing Selenium + Chrome compatibility..."
+          cat > TestChrome.java << 'TESTEOF'
+          import org.openqa.selenium.WebDriver;
+          import org.openqa.selenium.chrome.ChromeDriver;
+          import org.openqa.selenium.chrome.ChromeOptions;
+          
+          public class TestChrome {
+              public static void main(String[] args) {
+                  try {
+                      System.out.println("Creating Chrome options...");
+                      ChromeOptions options = new ChromeOptions();
+                      options.addArguments("--headless=new");
+                      options.addArguments("--no-sandbox");
+                      options.addArguments("--disable-dev-shm-usage");
+                      options.addArguments("--disable-gpu");
+                      options.setBinary("/usr/bin/google-chrome");
+                      
+                      System.out.println("Starting Chrome driver...");
+                      WebDriver driver = new ChromeDriver(options);
+                      
+                      System.out.println("Navigating to test page...");
+                      driver.get("https://www.google.com");
+                      
+                      System.out.println("Page title: " + driver.getTitle());
+                      System.out.println("✅ Chrome test PASSED!");
+                      
+                      driver.quit();
+                      System.exit(0);
+                  } catch (Exception e) {
+                      System.err.println("❌ Chrome test FAILED!");
+                      e.printStackTrace();
+                      System.exit(1);
+                  }
+              }
+          }
+          TESTEOF
+          
+          echo "Compiling test..."
+          javac -cp "lib/*" TestChrome.java
+          
+          echo "Running Chrome test..."
+          java -cp ".:lib/*" TestChrome
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ Chrome is working correctly!"
+          else
+            echo "❌ Chrome test failed - automation may not work"
             exit 1
           fi
           
