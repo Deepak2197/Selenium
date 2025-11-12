@@ -8,7 +8,7 @@ on:
         required: false
         default: 'Manual execution'
   schedule:
-    - cron: '0 9 * * *'  # Daily at 9 AM UTC
+    - cron: '0 9 * * *'
   push:
     branches:
       - main
@@ -16,13 +16,11 @@ on:
       - '**.java'
       - '.github/workflows/**'
 
-# Enhanced permissions for GitHub Actions
 permissions:
-  contents: write          # Allow writing to repository (for pushing artifacts)
-  pages: write            # Allow writing to GitHub Pages
-  id-token: write         # Allow OIDC token creation
-  actions: read           # Allow reading workflow runs
-  deployments: write      # Allow creating deployments
+  contents: read
+  pages: write
+  id-token: write
+  actions: read
 
 jobs:
   automation:
@@ -32,8 +30,6 @@ jobs:
     steps:
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
         
       - name: ☕ Setup Java 11
         uses: actions/setup-java@v4
@@ -56,11 +52,6 @@ jobs:
           echo ""
           echo "=== Java Version ==="
           java -version
-          echo ""
-          echo "=== Testing Chrome in Headless Mode ==="
-          google-chrome --headless --disable-gpu --dump-dom https://www.google.com | head -n 5
-          echo ""
-          echo "✓ Chrome headless test successful"
           
       - name: 📦 Download Selenium JARs - COMPLETE SET
         run: |
@@ -124,16 +115,16 @@ jobs:
         run: |
           mkdir -p screenshots
           mkdir -p compiled
-          chmod -R 755 screenshots compiled
-          echo "✓ Directories created with proper permissions"
-          ls -la
+          echo "✓ Directories created"
           
+      # ⭐⭐⭐ NAYA STEP - ChromeDriver Path Set Karo ⭐⭐⭐
       - name: 🔧 Set ChromeDriver Path
         run: |
+          export PATH=$PATH:/usr/bin
+          echo "PATH=$PATH" >> $GITHUB_ENV
           which chromedriver
           chromedriver --version
-          sudo chmod +x $(which chromedriver)
-          echo "✓ ChromeDriver path verified and made executable"
+          echo "✓ ChromeDriver path configured"
           
       - name: 🏗️ Compile Java Code
         run: |
@@ -150,58 +141,7 @@ jobs:
             exit 1
           fi
           
-      - name: 🧪 Test Chrome Setup
-        run: |
-          echo "Testing Selenium + Chrome compatibility..."
-          cat > TestChrome.java << 'TESTEOF'
-          import org.openqa.selenium.WebDriver;
-          import org.openqa.selenium.chrome.ChromeDriver;
-          import org.openqa.selenium.chrome.ChromeOptions;
-          
-          public class TestChrome {
-              public static void main(String[] args) {
-                  try {
-                      System.out.println("Creating Chrome options...");
-                      ChromeOptions options = new ChromeOptions();
-                      options.addArguments("--headless=new");
-                      options.addArguments("--no-sandbox");
-                      options.addArguments("--disable-dev-shm-usage");
-                      options.addArguments("--disable-gpu");
-                      options.setBinary("/usr/bin/google-chrome");
-                      
-                      System.out.println("Starting Chrome driver...");
-                      WebDriver driver = new ChromeDriver(options);
-                      
-                      System.out.println("Navigating to test page...");
-                      driver.get("https://www.google.com");
-                      
-                      System.out.println("Page title: " + driver.getTitle());
-                      System.out.println("✅ Chrome test PASSED!");
-                      
-                      driver.quit();
-                      System.exit(0);
-                  } catch (Exception e) {
-                      System.err.println("❌ Chrome test FAILED!");
-                      e.printStackTrace();
-                      System.exit(1);
-                  }
-              }
-          }
-          TESTEOF
-          
-          echo "Compiling test..."
-          javac -cp "lib/*" TestChrome.java
-          
-          echo "Running Chrome test..."
-          java -cp ".:lib/*" TestChrome
-          
-          if [ $? -eq 0 ]; then
-            echo "✅ Chrome is working correctly!"
-          else
-            echo "❌ Chrome test failed - automation may not work"
-            exit 1
-          fi
-          
+      # ⭐⭐⭐ TIMEOUT ADD KIYA ⭐⭐⭐
       - name: 🚀 Run DAMS CBT Automation
         env:
           CI: true
@@ -221,10 +161,9 @@ jobs:
           echo "=== Execution Summary ===" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          # Check screenshots
           if [ -d "screenshots" ]; then
             screenshot_count=$(ls -1 screenshots/*.png 2>/dev/null | wc -l)
-            echo "- **Screenshots Generated**: $screenshot_count" >> $GITHUB_STEP_SUMMARY
+            echo "- *Screenshots Generated*: $screenshot_count" >> $GITHUB_STEP_SUMMARY
             
             if [ $screenshot_count -gt 0 ]; then
               echo "" >> $GITHUB_STEP_SUMMARY
@@ -237,43 +176,49 @@ jobs:
                 fi
               done
             fi
-          else
-            echo "- **Screenshots**: No screenshots directory found ⚠️" >> $GITHUB_STEP_SUMMARY
           fi
           
-          # Check HTML report
           if ls DAMS_CBT_Report_*.html 1> /dev/null 2>&1; then
             report_file=$(ls DAMS_CBT_Report_*.html | head -1)
             report_size=$(du -h "$report_file" | cut -f1)
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- **HTML Report**: ✅ Generated ($report_size)" >> $GITHUB_STEP_SUMMARY
-            echo "  - File: \`$report_file\`" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- **HTML Report**: ❌ Not found" >> $GITHUB_STEP_SUMMARY
+            echo "- *HTML Report*: Generated ✅ ($report_size)" >> $GITHUB_STEP_SUMMARY
           fi
           
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "- **Run ID**: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Timestamp**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- *Run ID*: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          echo "- *Triggered by*: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           
-      - name: 📊 Upload Screenshots
+      # ✅ ONLY GitHub Pages artifact will be created
+      # Screenshots and HTML reports will be included directly in Pages deployment
+      
+      - name: 📦 Prepare Files for GitHub Pages
+        if: always()
+        run: |
+          mkdir -p ./github-pages-content/screenshots
+          
+          # Copy HTML report
+          if ls DAMS_CBT_Report_*.html 1> /dev/null 2>&1; then
+            cp DAMS_CBT_Report_*.html ./github-pages-content/
+            echo "✓ HTML report copied"
+          fi
+          
+          # Copy screenshots
+          if [ -d "screenshots" ] && [ "$(ls -A screenshots)" ]; then
+            cp screenshots/*.png ./github-pages-content/screenshots/ 2>/dev/null || true
+            echo "✓ Screenshots copied"
+          fi
+          
+          echo "✓ All files prepared for GitHub Pages"
+          ls -la ./github-pages-content/
+          ls -la ./github-pages-content/screenshots/ || true
+      
+      # ✅ Upload as workflow artifact (for deploy-reports job)
+      - name: 📤 Upload GitHub Pages Content
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: qr-screenshots-${{ github.run_id }}
-          path: screenshots/
-          retention-days: 30
-          if-no-files-found: warn
-          
-      - name: 📄 Upload HTML Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: html-report-${{ github.run_id }}
-          path: DAMS_CBT_Report_*.html
+          name: github-pages-content
+          path: ./github-pages-content/
           retention-days: 30
           if-no-files-found: warn
           
@@ -281,20 +226,14 @@ jobs:
         if: failure()
         run: |
           echo "=== Debug Information ==="
-          echo "Current directory:"
           pwd
-          echo ""
-          echo "Root files:"
           ls -la
           echo ""
-          echo "Screenshots directory:"
-          ls -la screenshots/ 2>/dev/null || echo "No screenshots directory"
+          echo "Screenshots:"
+          ls -la screenshots/ || echo "No screenshots"
           echo ""
-          echo "Compiled directory:"
-          ls -la compiled/ 2>/dev/null || echo "No compiled directory"
-          echo ""
-          echo "HTML Reports:"
-          ls -la DAMS_CBT_Report_*.html 2>/dev/null || echo "No HTML reports found"
+          echo "Compiled:"
+          ls -la compiled/ || echo "No compiled"
           echo ""
           echo "Libraries:"
           ls -la lib/ | head -20
@@ -303,13 +242,6 @@ jobs:
     needs: automation
     runs-on: ubuntu-latest
     if: always() && github.ref == 'refs/heads/main'
-    
-    # Enhanced permissions for GitHub Pages deployment
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-      deployments: write
     
     concurrency:
       group: pages
@@ -320,27 +252,18 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
       
     steps:
-      - name: 📥 Download HTML Reports
+      - name: 📥 Download GitHub Pages Content
         uses: actions/download-artifact@v4
         with:
-          pattern: html-report-*
-          merge-multiple: true
+          name: github-pages-content
           path: ./reports
-        continue-on-error: true
-        
-      - name: 📥 Download Screenshots
-        uses: actions/download-artifact@v4
-        with:
-          pattern: qr-screenshots-*
-          merge-multiple: true
-          path: ./reports/screenshots
         continue-on-error: true
         
       - name: 🏗️ Create Index Page
         run: |
           mkdir -p ./reports
           
-          cat > ./reports/index.html << 'INDEXEOF'
+          cat > ./reports/index.html << 'EOF'
           <!DOCTYPE html>
           <html lang="en">
           <head>
@@ -378,46 +301,35 @@ jobs:
                 padding: 40px; 
                 border-radius: 20px; 
                 box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-                margin-bottom: 30px;
               }
-              .report-list h2 { color: #2d3748; margin-bottom: 20px; font-size: 28px; }
+              .report-list h2 { color: #2d3748; margin-bottom: 20px; }
               .report-item { 
-                padding: 20px; 
-                margin: 15px 0; 
+                padding: 15px; 
+                margin: 10px 0; 
                 background: #f7fafc; 
-                border-radius: 12px; 
+                border-radius: 10px; 
                 transition: all 0.3s;
-                border-left: 5px solid #667eea;
               }
               .report-item:hover { 
                 background: #e2e8f0; 
                 transform: translateX(5px);
-                box-shadow: 0 5px 15px rgba(0,0,0,0.1);
               }
               a { 
                 color: #667eea; 
                 text-decoration: none; 
                 font-weight: 600; 
                 display: block;
-                font-size: 18px;
               }
               a:hover { color: #764ba2; }
               .timestamp { 
                 color: #718096; 
                 font-size: 14px; 
-                margin-top: 8px; 
+                margin-top: 5px; 
               }
               .no-reports {
                 text-align: center;
                 color: #718096;
-                padding: 60px 20px;
-              }
-              .no-reports p { font-size: 18px; margin: 10px 0; }
-              .footer {
-                text-align: center;
-                color: white;
-                font-size: 14px;
-                margin-top: 40px;
+                padding: 40px;
               }
             </style>
           </head>
@@ -425,11 +337,11 @@ jobs:
             <div class="container">
               <div class="header">
                 <h1>🎯 DAMS CBT Automation Reports</h1>
-                <p style="color: #718096; margin-top: 10px; font-size: 18px;">Comprehensive CBT Course Purchase Summary</p>
+                <p style="color: #718096; margin-top: 10px;">Comprehensive CBT Course Purchase Summary</p>
               </div>
               <div class="report-list">
                 <h2>📊 Available Reports:</h2>
-          INDEXEOF
+          EOF
           
           report_found=false
           
@@ -456,19 +368,14 @@ jobs:
             echo "</div>" >> ./reports/index.html
           fi
           
-          cat >> ./reports/index.html << 'INDEXEOF'
-              </div>
-              <div class="footer">
-                <p>DAMS Delhi CBT Automation • Powered by GitHub Actions</p>
+          cat >> ./reports/index.html << 'EOF'
               </div>
             </div>
           </body>
           </html>
-          INDEXEOF
+          EOF
           
           echo "✓ Index page created"
-          echo "Files in reports directory:"
-          ls -la ./reports/
           
       - name: 🚀 Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
