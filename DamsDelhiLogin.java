@@ -48,7 +48,7 @@ public class DamsDelhiLogin {
             executionStartTime = fileFormat.format(new Date());
 
             System.out.println("╔════════════════════════════════════════════╗");
-            System.out.println("║  DAMS CBT AUTOMATION - ALL CBT COURSES    ║");
+            System.out.println("║  DAMS -CBT COURSES    ║");
             System.out.println("╚════════════════════════════════════════════╝\n");
 
             setupDriver();
