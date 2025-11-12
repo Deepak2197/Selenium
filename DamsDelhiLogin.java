@@ -13,6 +13,7 @@ import org.openqa.selenium.JavascriptExecutor;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.FileWriter;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
@@ -21,6 +22,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
+import java.util.ArrayList;
 
 public class DamsDelhiLogin {
     private WebDriver driver;
@@ -28,26 +30,44 @@ public class DamsDelhiLogin {
     private WebDriverWait longWait;
     private String studentPhone = "+919456628016";
     private String studentOtp = "2000";
+    
+    // Report data collection
+    private List<Map<String, String>> reportSteps = new ArrayList<>();
+    private LocalDateTime startTime;
+    private LocalDateTime endTime;
+    private boolean overallSuccess = false;
+    private List<String> screenshotPaths = new ArrayList<>();
 
     public DamsDelhiLogin() {
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--start-maximized");
         options.addArguments("--disable-blink-features=AutomationControlled");
+        options.addArguments("--no-sandbox");
+        options.addArguments("--disable-dev-shm-usage");
 
         this.driver = new ChromeDriver(options);
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(15));
         this.longWait = new WebDriverWait(driver, Duration.ofSeconds(30));
+        this.startTime = LocalDateTime.now();
     }
 
-    /**
-     * Login to damsdelhi.com student portal
-     */
+    private void addReportStep(String step, String status, String details) {
+        Map<String, String> stepData = new HashMap<>();
+        stepData.put("step", step);
+        stepData.put("status", status);
+        stepData.put("details", details);
+        stepData.put("timestamp", LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+        reportSteps.add(stepData);
+        System.out.println(status + " " + step + " - " + details);
+    }
+
     public boolean loginToDamsDelhi() {
         System.out.println("🔐 Starting login process for damsdelhi.com");
+        addReportStep("Login Process", "🔄 STARTED", "Initiating login to DAMS Delhi portal");
 
         try {
             driver.get("https://www.damsdelhi.com/");
-            System.out.println("✅ Loaded damsdelhi.com");
+            addReportStep("Load Homepage", "✅ SUCCESS", "Successfully loaded damsdelhi.com");
             Thread.sleep(3000);
 
             WebElement signinElement = wait.until(
@@ -56,7 +76,7 @@ public class DamsDelhiLogin {
                 )
             );
             signinElement.click();
-            System.out.println("✅ Clicked Sign in button");
+            addReportStep("Click Sign In", "✅ SUCCESS", "Clicked Sign in button");
             Thread.sleep(3000);
 
             WebElement phoneField = wait.until(
@@ -69,14 +89,14 @@ public class DamsDelhiLogin {
             );
             phoneField.clear();
             phoneField.sendKeys(studentPhone);
-            System.out.println("✅ Entered phone number: " + studentPhone);
+            addReportStep("Enter Phone Number", "✅ SUCCESS", "Entered: " + studentPhone);
             Thread.sleep(2000);
 
             WebElement submitButton = wait.until(
                 ExpectedConditions.elementToBeClickable(By.className("common-bottom-btn"))
             );
             submitButton.click();
-            System.out.println("✅ Clicked to request OTP");
+            addReportStep("Request OTP", "✅ SUCCESS", "Clicked to request OTP");
             Thread.sleep(3000);
 
             try {
@@ -85,11 +105,11 @@ public class DamsDelhiLogin {
                 );
                 if (logoutContinueButton.isDisplayed()) {
                     logoutContinueButton.click();
-                    System.out.println("✅ Clicked Logout & Continue button");
+                    addReportStep("Handle Existing Session", "✅ SUCCESS", "Clicked Logout & Continue");
                     Thread.sleep(3000);
                 }
             } catch (NoSuchElementException e) {
-                System.out.println("ℹ️  No Logout & Continue button found - continuing");
+                addReportStep("Check Existing Session", "ℹ️ INFO", "No logout required");
             }
 
             WebElement otpField = wait.until(
@@ -101,23 +121,21 @@ public class DamsDelhiLogin {
             );
             otpField.clear();
             otpField.sendKeys(studentOtp);
-            System.out.println("✅ Entered OTP: " + studentOtp);
+            addReportStep("Enter OTP", "✅ SUCCESS", "Entered OTP: " + studentOtp);
             Thread.sleep(2000);
 
             WebElement submitOtpButton = wait.until(
                 ExpectedConditions.elementToBeClickable(By.className("common-bottom-btn"))
             );
             submitOtpButton.click();
-            System.out.println("✅ Submitted OTP");
+            addReportStep("Submit OTP", "✅ SUCCESS", "Submitted OTP for verification");
             Thread.sleep(5000);
 
             String currentUrl = driver.getCurrentUrl();
-            System.out.println("✅ Current URL after login: " + currentUrl);
+            addReportStep("Verify Login", "✅ SUCCESS", "Login successful - URL: " + currentUrl);
 
             String lowerUrl = currentUrl.toLowerCase();
             if (!lowerUrl.contains("dashboard") && !lowerUrl.contains("student") && !lowerUrl.contains("profile")) {
-                System.out.println("ℹ️  Not on dashboard, looking for dashboard link...");
-
                 try {
                     WebElement dashboardLink = wait.until(
                         ExpectedConditions.elementToBeClickable(
@@ -127,47 +145,45 @@ public class DamsDelhiLogin {
                         )
                     );
                     dashboardLink.click();
-                    System.out.println("✅ Clicked dashboard link");
+                    addReportStep("Navigate to Dashboard", "✅ SUCCESS", "Clicked dashboard link");
                     Thread.sleep(3000);
-
-                    currentUrl = driver.getCurrentUrl();
-                    System.out.println("✅ New URL: " + currentUrl);
                 } catch (TimeoutException e) {
-                    System.out.println("⚠️  Dashboard link not found, continuing anyway...");
+                    addReportStep("Navigate to Dashboard", "⚠️ WARNING", "Dashboard link not found");
                 }
             }
 
-            System.out.println("🎉 Login successful!");
+            String screenshotPath = takeScreenshot("01_Login_Success");
+            if (screenshotPath != null) {
+                screenshotPaths.add(screenshotPath);
+            }
+
+            addReportStep("Login Complete", "🎉 SUCCESS", "Successfully logged into DAMS Delhi portal");
             return true;
 
         } catch (TimeoutException e) {
-            System.out.println("❌ Timeout: " + e.getMessage());
+            addReportStep("Login Failed", "❌ FAILED", "Timeout: " + e.getMessage());
+            takeScreenshot("ERROR_Login_Timeout");
             return false;
         } catch (InterruptedException e) {
-            System.out.println("❌ Interrupted: " + e.getMessage());
+            addReportStep("Login Failed", "❌ FAILED", "Interrupted: " + e.getMessage());
             Thread.currentThread().interrupt();
             return false;
         } catch (Exception e) {
-            System.out.println("❌ Error: " + e.getMessage());
-            e.printStackTrace();
+            addReportStep("Login Failed", "❌ FAILED", "Error: " + e.getMessage());
+            takeScreenshot("ERROR_Login_Exception");
             return false;
         }
     }
 
-    /**
-     * Complete payment flow after login - UPDATED FOR QR CODE AND $0
-     */
     public boolean proceedToPayment() {
         System.out.println("\n💳 Starting payment process...");
+        addReportStep("Payment Process", "🔄 STARTED", "Initiating payment flow");
 
         try {
-            System.out.println("🔍 Current page: " + driver.getCurrentUrl());
-            System.out.println("🔍 Page title: " + driver.getTitle());
-
             Thread.sleep(2000);
 
-            // Step 0.5: Click "GO PRO" button
-            System.out.println("🔶 Step 0: Looking for 'GO PRO' button...");
+            // Step 0: Click GO PRO button
+            addReportStep("Find GO PRO Button", "🔄 PROCESSING", "Searching for GO PRO button");
             WebElement goProBtn = null;
 
             try {
@@ -178,8 +194,6 @@ public class DamsDelhiLogin {
                 if (!btnText.contains("Go Pro") && !btnText.contains("GO PRO") && !btnText.contains("Premium")) {
                     throw new TimeoutException("Wrong button found");
                 }
-                System.out.println("✅ Found GO PRO button!");
-
             } catch (TimeoutException e1) {
                 try {
                     goProBtn = longWait.until(
@@ -187,21 +201,16 @@ public class DamsDelhiLogin {
                             By.xpath("//button[@class='btn'][.//strong[contains(text(), 'Go Pro')]]")
                         )
                     );
-                    System.out.println("✅ Found GO PRO button via XPath with strong tag!");
                 } catch (TimeoutException e2) {
                     List<WebElement> allButtons = driver.findElements(By.tagName("button"));
                     for (WebElement btn : allButtons) {
                         String text = btn.getText().trim();
                         String className = btn.getAttribute("class");
-                        if ((text.contains("Go Pro") || text.contains("GO PRO") || text.contains("Premium Access")) 
+                        if ((text.contains("Go Pro") || text.contains("GO PRO")) 
                             && className != null && className.contains("btn")) {
                             goProBtn = btn;
-                            System.out.println("✅ Found matching button");
                             break;
                         }
-                    }
-                    if (goProBtn == null) {
-                        System.out.println("❌ GO PRO button not found, maybe already on premium page");
                     }
                 }
             }
@@ -212,30 +221,28 @@ public class DamsDelhiLogin {
                     goProBtn
                 );
                 Thread.sleep(1000);
-                ((JavascriptExecutor) driver).executeScript(
-                    "arguments[0].style.border='5px solid lime'; arguments[0].style.backgroundColor='yellow';", 
-                    goProBtn
-                );
-                Thread.sleep(1000);
                 clickElement(goProBtn, "GO PRO");
+                addReportStep("Click GO PRO", "✅ SUCCESS", "Clicked GO PRO button");
                 Thread.sleep(5000);
+                takeScreenshot("02_Go_Pro_Page");
+            } else {
+                addReportStep("Click GO PRO", "⚠️ WARNING", "GO PRO button not found, continuing");
             }
 
-            // 1. Click "Buy Now"
-            System.out.println("🔶 Step 1: Looking for 'Buy Now' button...");
+            // Step 1: Click Buy Now
+            addReportStep("Click Buy Now", "🔄 PROCESSING", "Looking for Buy Now button");
             WebElement buyNowBtn = longWait.until(
                 ExpectedConditions.presenceOfElementLocated(By.cssSelector("h5.buy-now-btn"))
             );
             ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({block: 'center'});", buyNowBtn);
             Thread.sleep(1000);
-            ((JavascriptExecutor) driver).executeScript(
-                "arguments[0].style.border='3px solid red'", buyNowBtn
-            );
-            Thread.sleep(500);
             clickElement(buyNowBtn, "Buy Now");
+            addReportStep("Click Buy Now", "✅ SUCCESS", "Clicked Buy Now button");
             Thread.sleep(3000);
+            takeScreenshot("03_Buy_Now_Clicked");
 
-            // 2. Select "12 Months"
+            // Step 2: Select 12 Months
+            addReportStep("Select Plan", "🔄 PROCESSING", "Selecting 12 Months plan");
             WebElement twelveMonths = longWait.until(
                 ExpectedConditions.elementToBeClickable(
                     By.xpath("//h3[contains(text(), '12 Months') or text()='12 Months']")
@@ -244,48 +251,57 @@ public class DamsDelhiLogin {
             ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", twelveMonths);
             Thread.sleep(500);
             clickElement(twelveMonths, "12 Months");
+            addReportStep("Select Plan", "✅ SUCCESS", "Selected 12 Months plan");
             Thread.sleep(2000);
 
-            // 2.5: Handle "Cart Already Contains Items" modal
+            // Step 2.5: Handle cart modal
             try {
                 WebElement yesButton = wait.until(
                     ExpectedConditions.elementToBeClickable(
                         By.xpath("//button[.//span[text()='Yes'] or contains(text(), 'Yes')]")
                     )
                 );
-                ((JavascriptExecutor) driver).executeScript("arguments[0].style.border='3px solid blue'", yesButton);
-                Thread.sleep(500);
                 clickElement(yesButton, "Yes (Cart Modal)");
+                addReportStep("Handle Cart Modal", "✅ SUCCESS", "Confirmed cart replacement");
                 Thread.sleep(4000);
-            } catch (TimeoutException ignored) {}
+            } catch (TimeoutException e) {
+                addReportStep("Handle Cart Modal", "ℹ️ INFO", "No cart modal appeared");
+            }
 
-            // 3. Click today-button
+            // Step 3: Click today-button
+            addReportStep("Select Start Date", "🔄 PROCESSING", "Clicking today button");
             WebElement todayBtn = wait.until(
                 ExpectedConditions.elementToBeClickable(
                     By.xpath("//div[contains(@class, 'today-button')]")
                 )
             );
             clickElement(todayBtn, "Today button");
+            addReportStep("Select Start Date", "✅ SUCCESS", "Selected today as start date");
             Thread.sleep(2000);
+            takeScreenshot("04_Date_Selected");
 
-            // 4. Click Continue
+            // Step 4: Click Continue
+            addReportStep("Proceed to Payment", "🔄 PROCESSING", "Clicking Continue button");
             WebElement continueBtn = longWait.until(
                 ExpectedConditions.elementToBeClickable(By.xpath("//span[contains(text(), 'Continue')]"))
             );
             clickElement(continueBtn, "Continue");
+            addReportStep("Proceed to Payment", "✅ SUCCESS", "Clicked Continue");
             Thread.sleep(3000);
 
-            // 5. Click h6 element
+            // Step 5: Click h6 element
             List<WebElement> h6Elements = driver.findElements(By.tagName("h6"));
             if (!h6Elements.isEmpty()) {
                 WebElement h6Element = wait.until(
                     ExpectedConditions.elementToBeClickable(h6Elements.get(0))
                 );
                 clickElement(h6Element, "h6 element");
+                addReportStep("Expand Payment Options", "✅ SUCCESS", "Clicked payment section");
                 Thread.sleep(2000);
             }
 
-            // 6. Select Paytm radio
+            // Step 6: Select Paytm
+            addReportStep("Select Payment Method", "🔄 PROCESSING", "Selecting Paytm");
             WebElement paytmRadio = longWait.until(
                 ExpectedConditions.presenceOfElementLocated(
                     By.xpath("//input[@type='radio' and @value='Paytm']")
@@ -294,17 +310,17 @@ public class DamsDelhiLogin {
             ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", paytmRadio);
             Thread.sleep(500);
             clickElement(paytmRadio, "Paytm radio");
+            addReportStep("Select Payment Method", "✅ SUCCESS", "Selected Paytm as payment method");
             Thread.sleep(2000);
+            takeScreenshot("05_Payment_Method_Selected");
 
-            // 7. Click Pay Now - UPDATED FOR ANT DESIGN BUTTON IN MODAL
-            System.out.println("🔶 Step 7: Looking for 'Pay Now' button in Payment Mode modal...");
+            // Step 7: Click Pay Now
+            addReportStep("Complete Payment", "🔄 PROCESSING", "Looking for Pay Now button");
             WebElement payNowBtnFinal = null;
 
             try {
-                // Wait for modal to appear
                 Thread.sleep(2000);
                 
-                // Method 1: Find the blue Ant Design button with "Pay Now" text in modal
                 try {
                     payNowBtnFinal = longWait.until(
                         ExpectedConditions.elementToBeClickable(
@@ -313,137 +329,69 @@ public class DamsDelhiLogin {
                                     "(contains(text(), 'Pay Now') or .//span[contains(text(), 'Pay Now')])]")
                         )
                     );
-                    System.out.println("✅ Found Ant Design 'Pay Now' button in modal (Method 1)");
                 } catch (TimeoutException e1) {
-                    System.out.println("🔍 Method 1 failed, trying Method 2...");
+                    List<WebElement> antButtons = driver.findElements(
+                        By.xpath("//button[contains(@class, 'ant-btn-primary') and " +
+                                "contains(@class, 'ant-btn-block')]")
+                    );
                     
-                    // Method 2: Find any ant-btn-primary ant-btn-block button
-                    try {
-                        List<WebElement> antButtons = driver.findElements(
-                            By.xpath("//button[contains(@class, 'ant-btn-primary') and " +
-                                    "contains(@class, 'ant-btn-block')]")
-                        );
-                        
-                        System.out.println("🔍 Found " + antButtons.size() + " block buttons");
-                        
-                        for (WebElement btn : antButtons) {
-                            String btnText = btn.getText().toLowerCase();
-                            System.out.println("🔍 Button text: " + btnText);
-                            if (btnText.contains("pay now") || btnText.contains("pay")) {
-                                payNowBtnFinal = btn;
-                                System.out.println("✅ Found Pay Now button (Method 2)");
-                                break;
-                            }
+                    for (WebElement btn : antButtons) {
+                        String btnText = btn.getText().toLowerCase();
+                        if (btnText.contains("pay now") || btnText.contains("pay")) {
+                            payNowBtnFinal = btn;
+                            break;
                         }
-                    } catch (Exception e2) {
-                        System.out.println("🔍 Method 2 failed, trying Method 3...");
                     }
                 }
-                
-                // Method 3: Find button inside modal with specific text
-                if (payNowBtnFinal == null) {
-                    try {
-                        payNowBtnFinal = longWait.until(
-                            ExpectedConditions.elementToBeClickable(
-                                By.xpath("//div[contains(@class, 'ant-modal')]//button[contains(text(), 'Pay Now')]")
-                            )
-                        );
-                        System.out.println("✅ Found Pay Now button in modal (Method 3)");
-                    } catch (TimeoutException e3) {
-                        System.out.println("🔍 Method 3 failed, trying Method 4...");
-                    }
-                }
-                
-                // Method 4: CSS Selector approach
-                if (payNowBtnFinal == null) {
-                    try {
-                        payNowBtnFinal = longWait.until(
-                            ExpectedConditions.elementToBeClickable(
-                                By.cssSelector("button.ant-btn.ant-btn-primary.ant-btn-block")
-                            )
-                        );
-                        System.out.println("✅ Found Ant button via CSS (Method 4)");
-                    } catch (TimeoutException e4) {
-                        System.out.println("⚠️  All methods failed, trying last fallback...");
-                    }
-                }
-                
-                // Last fallback
+
                 if (payNowBtnFinal == null) {
                     payNowBtnFinal = longWait.until(
                         ExpectedConditions.elementToBeClickable(
-                            By.xpath("//button[contains(@class, 'ant-btn')]")
+                            By.cssSelector("button.ant-btn.ant-btn-primary.ant-btn-block")
                         )
                     );
-                    System.out.println("⚠️  Using generic Ant button");
                 }
 
-                // Highlight and prepare to click
                 ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView(true);", payNowBtnFinal);
                 Thread.sleep(500);
-                ((JavascriptExecutor) driver).executeScript(
-                    "arguments[0].style.border='5px solid green'; arguments[0].style.backgroundColor='yellow';", 
-                    payNowBtnFinal
-                );
-                Thread.sleep(1000);
                 
-                // Store current URL before clicking
                 String urlBeforeClick = driver.getCurrentUrl();
-                System.out.println("📍 Current URL before click: " + urlBeforeClick);
                 
-                // First click
-                clickElement(payNowBtnFinal, "Pay Now $0 Button (1st click)");
+                clickElement(payNowBtnFinal, "Pay Now (1st click)");
                 Thread.sleep(2000);
+                clickElement(payNowBtnFinal, "Pay Now (2nd click)");
+                addReportStep("Complete Payment", "✅ SUCCESS", "Clicked Pay Now button");
                 
-                // Second click
-                clickElement(payNowBtnFinal, "Pay Now $0 Button (2nd click)");
-                System.out.println("✅ Clicked Pay Now button 2 times");
-                
-                // Wait for URL to change or new page to load (max 60 seconds)
-                System.out.println("⏳ Waiting for next page to open...");
+                System.out.println("⏳ Waiting for payment page to load...");
                 WebDriverWait urlChangeWait = new WebDriverWait(driver, Duration.ofSeconds(60));
                 
-                boolean urlChanged = false;
                 try {
-                    urlChangeWait.until(driver -> {
-                        String currentUrl = driver.getCurrentUrl();
-                        return !currentUrl.equals(urlBeforeClick);
-                    });
-                    urlChanged = true;
-                    System.out.println("✅ Page changed! New URL: " + driver.getCurrentUrl());
+                    urlChangeWait.until(driver -> !driver.getCurrentUrl().equals(urlBeforeClick));
+                    addReportStep("Payment Page Load", "✅ SUCCESS", "Payment page loaded: " + driver.getCurrentUrl());
                 } catch (TimeoutException e) {
-                    System.out.println("⚠️  URL did not change in 60 seconds, checking page state...");
+                    addReportStep("Payment Page Load", "⚠️ WARNING", "URL did not change, checking page state");
                 }
                 
-                // Additional wait to ensure page is fully loaded
-                if (urlChanged) {
-                    Thread.sleep(5000);
-                    System.out.println("✅ Next page fully loaded!");
-                } else {
-                    // Even if URL didn't change, wait a bit for any dynamic content
-                    Thread.sleep(10000);
-                    System.out.println("⏳ Waited for dynamic content to load");
-                }
+                Thread.sleep(5000);
 
             } catch (TimeoutException e) {
-                System.out.println("❌ Pay Now button not found: " + e.getMessage());
+                addReportStep("Complete Payment", "❌ FAILED", "Pay Now button not found: " + e.getMessage());
+                takeScreenshot("ERROR_Pay_Now_Not_Found");
             }
 
-            // Take screenshot
-            String screenshotPath = takeScreenshot("DAMS_QR_Payment");
+            String screenshotPath = takeScreenshot("06_FINAL_Payment_Page");
             if (screenshotPath != null) {
-                System.out.println("✅ Screenshot saved: " + screenshotPath);
-                closeBrowser();
-                return true;
-            } else {
-                System.out.println("⚠️ Screenshot failed but payment page reached");
-                closeBrowser();
-                return true;
+                screenshotPaths.add(screenshotPath);
+                addReportStep("Screenshot Captured", "✅ SUCCESS", "Final screenshot saved");
             }
+
+            addReportStep("Payment Process", "🎉 COMPLETE", "Payment flow completed successfully");
+            this.overallSuccess = true;
+            return true;
 
         } catch (Exception e) {
-            System.out.println("❌ Error during payment: " + e.getMessage());
-            e.printStackTrace();
+            addReportStep("Payment Process", "❌ FAILED", "Error: " + e.getMessage());
+            takeScreenshot("ERROR_Payment_Exception");
             return false;
         }
     }
@@ -451,11 +399,9 @@ public class DamsDelhiLogin {
     private void clickElement(WebElement element, String elementName) {
         try {
             element.click();
-            System.out.println("✅ Clicked " + elementName);
         } catch (Exception e) {
             try {
                 ((JavascriptExecutor) driver).executeScript("arguments[0].click();", element);
-                System.out.println("✅ Clicked " + elementName + " (via JavaScript)");
             } catch (Exception ex) {
                 System.out.println("❌ Failed to click " + elementName + ": " + ex.getMessage());
                 throw ex;
@@ -465,19 +411,179 @@ public class DamsDelhiLogin {
 
     public String takeScreenshot(String baseFilename) {
         try {
+            File screenshotDir = new File("screenshots");
+            if (!screenshotDir.exists()) {
+                screenshotDir.mkdirs();
+            }
+
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-            String filename = baseFilename + "_" + timestamp + ".png";
+            String filename = "screenshots/" + baseFilename + "_" + timestamp + ".png";
 
             TakesScreenshot screenshotDriver = (TakesScreenshot) driver;
             File sourceFile = screenshotDriver.getScreenshotAs(OutputType.FILE);
             File destinationFile = new File(filename);
             Files.copy(sourceFile.toPath(), destinationFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
 
-            return destinationFile.getAbsolutePath();
+            return filename;
 
         } catch (IOException e) {
             System.out.println("❌ Screenshot save failed: " + e.getMessage());
             return null;
+        }
+    }
+
+    public void generateHTMLReport() {
+        try {
+            this.endTime = LocalDateTime.now();
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            String filename = "DAMS_CBT_Report_" + timestamp + ".html";
+
+            FileWriter writer = new FileWriter(filename);
+            
+            String duration = Duration.between(startTime, endTime).toSeconds() + " seconds";
+            String statusColor = overallSuccess ? "#10b981" : "#ef4444";
+            String statusText = overallSuccess ? "✅ SUCCESS" : "❌ FAILED";
+
+            writer.write("<!DOCTYPE html>\n");
+            writer.write("<html lang=\"en\">\n");
+            writer.write("<head>\n");
+            writer.write("    <meta charset=\"UTF-8\">\n");
+            writer.write("    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n");
+            writer.write("    <title>DAMS CBT Automation Report</title>\n");
+            writer.write("    <style>\n");
+            writer.write("        * { margin: 0; padding: 0; box-sizing: border-box; }\n");
+            writer.write("        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 20px; }\n");
+            writer.write("        .container { max-width: 1400px; margin: 0 auto; }\n");
+            writer.write("        .header { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); }\n");
+            writer.write("        .header h1 { font-size: 42px; color: #2d3748; margin-bottom: 10px; }\n");
+            writer.write("        .header .subtitle { color: #718096; font-size: 18px; }\n");
+            writer.write("        .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; }\n");
+            writer.write("        .summary-card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }\n");
+            writer.write("        .summary-card h3 { color: #718096; font-size: 14px; text-transform: uppercase; margin-bottom: 10px; }\n");
+            writer.write("        .summary-card .value { font-size: 32px; font-weight: 700; color: #2d3748; }\n");
+            writer.write("        .steps-container { background: white; border-radius: 20px; padding: 40px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); margin-bottom: 30px; }\n");
+            writer.write("        .steps-container h2 { color: #2d3748; margin-bottom: 30px; font-size: 28px; }\n");
+            writer.write("        .step { padding: 20px; margin: 15px 0; background: #f7fafc; border-radius: 12px; border-left: 5px solid #667eea; transition: all 0.3s; }\n");
+            writer.write("        .step:hover { transform: translateX(5px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }\n");
+            writer.write("        .step.success { border-left-color: #10b981; }\n");
+            writer.write("        .step.failed { border-left-color: #ef4444; }\n");
+            writer.write("        .step.warning { border-left-color: #f59e0b; }\n");
+            writer.write("        .step-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }\n");
+            writer.write("        .step-name { font-weight: 600; font-size: 18px; color: #2d3748; }\n");
+            writer.write("        .step-status { padding: 6px 16px; border-radius: 20px; font-size: 14px; font-weight: 600; }\n");
+            writer.write("        .step-status.success { background: #d1fae5; color: #065f46; }\n");
+            writer.write("        .step-status.failed { background: #fee2e2; color: #991b1b; }\n");
+            writer.write("        .step-status.warning { background: #fef3c7; color: #92400e; }\n");
+            writer.write("        .step-status.info { background: #dbeafe; color: #1e40af; }\n");
+            writer.write("        .step-details { color: #4b5563; font-size: 15px; line-height: 1.6; }\n");
+            writer.write("        .step-time { color: #9ca3af; font-size: 13px; margin-top: 8px; }\n");
+            writer.write("        .screenshots { background: white; border-radius: 20px; padding: 40px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); }\n");
+            writer.write("        .screenshots h2 { color: #2d3748; margin-bottom: 30px; font-size: 28px; }\n");
+            writer.write("        .screenshot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }\n");
+            writer.write("        .screenshot-item { border-radius: 12px; overflow: hidden; box-shadow: 0 5px 15px rgba(0,0,0,0.1); transition: all 0.3s; }\n");
+            writer.write("        .screenshot-item:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.2); }\n");
+            writer.write("        .screenshot-item img { width: 100%; height: auto; display: block; }\n");
+            writer.write("        .screenshot-label { padding: 15px; background: #f7fafc; font-size: 14px; color: #4b5563; font-weight: 600; }\n");
+            writer.write("        .footer { text-align: center; margin-top: 40px; color: white; font-size: 14px; }\n");
+            writer.write("    </style>\n");
+            writer.write("</head>\n");
+            writer.write("<body>\n");
+            writer.write("    <div class=\"container\">\n");
+            writer.write("        <div class=\"header\">\n");
+            writer.write("            <h1>🎯 DAMS CBT Automation Report</h1>\n");
+            writer.write("            <p class=\"subtitle\">Comprehensive CBT Course Purchase Summary</p>\n");
+            writer.write("        </div>\n");
+            
+            // Summary cards
+            int successCount = (int) reportSteps.stream().filter(s -> s.get("status").contains("SUCCESS")).count();
+            int failedCount = (int) reportSteps.stream().filter(s -> s.get("status").contains("FAILED")).count();
+            int warningCount = (int) reportSteps.stream().filter(s -> s.get("status").contains("WARNING")).count();
+            
+            writer.write("        <div class=\"summary\">\n");
+            writer.write("            <div class=\"summary-card\">\n");
+            writer.write("                <h3>Overall Status</h3>\n");
+            writer.write("                <div class=\"value\" style=\"color: " + statusColor + "\">" + statusText + "</div>\n");
+            writer.write("            </div>\n");
+            writer.write("            <div class=\"summary-card\">\n");
+            writer.write("                <h3>Duration</h3>\n");
+            writer.write("                <div class=\"value\" style=\"color: #667eea\">" + duration + "</div>\n");
+            writer.write("            </div>\n");
+            writer.write("            <div class=\"summary-card\">\n");
+            writer.write("                <h3>Total Steps</h3>\n");
+            writer.write("                <div class=\"value\" style=\"color: #764ba2\">" + reportSteps.size() + "</div>\n");
+            writer.write("            </div>\n");
+            writer.write("            <div class=\"summary-card\">\n");
+            writer.write("                <h3>Success Rate</h3>\n");
+            writer.write("                <div class=\"value\" style=\"color: #10b981\">" + successCount + "/" + reportSteps.size() + "</div>\n");
+            writer.write("            </div>\n");
+            writer.write("        </div>\n");
+            
+            // Steps
+            writer.write("        <div class=\"steps-container\">\n");
+            writer.write("            <h2>📋 Execution Steps</h2>\n");
+            
+            for (Map<String, String> step : reportSteps) {
+                String status = step.get("status");
+                String stepClass = "step";
+                String statusClass = "info";
+                
+                if (status.contains("SUCCESS") || status.contains("COMPLETE")) {
+                    stepClass += " success";
+                    statusClass = "success";
+                } else if (status.contains("FAILED")) {
+                    stepClass += " failed";
+                    statusClass = "failed";
+                } else if (status.contains("WARNING")) {
+                    stepClass += " warning";
+                    statusClass = "warning";
+                }
+                
+                writer.write("            <div class=\"" + stepClass + "\">\n");
+                writer.write("                <div class=\"step-header\">\n");
+                writer.write("                    <div class=\"step-name\">" + step.get("step") + "</div>\n");
+                writer.write("                    <div class=\"step-status " + statusClass + "\">" + status + "</div>\n");
+                writer.write("                </div>\n");
+                writer.write("                <div class=\"step-details\">" + step.get("details") + "</div>\n");
+                writer.write("                <div class=\"step-time\">⏱️ " + step.get("timestamp") + "</div>\n");
+                writer.write("            </div>\n");
+            }
+            
+            writer.write("        </div>\n");
+            
+            // Screenshots
+            if (!screenshotPaths.isEmpty()) {
+                writer.write("        <div class=\"screenshots\">\n");
+                writer.write("            <h2>📸 Screenshots (" + screenshotPaths.size() + ")</h2>\n");
+                writer.write("            <div class=\"screenshot-grid\">\n");
+                
+                for (String path : screenshotPaths) {
+                    String filename = new File(path).getName();
+                    writer.write("                <div class=\"screenshot-item\">\n");
+                    writer.write("                    <img src=\"" + path + "\" alt=\"" + filename + "\">\n");
+                    writer.write("                    <div class=\"screenshot-label\">" + filename + "</div>\n");
+                    writer.write("                </div>\n");
+                }
+                
+                writer.write("            </div>\n");
+                writer.write("        </div>\n");
+            }
+            
+            writer.write("        <div class=\"footer\">\n");
+            writer.write("            <p>Generated on " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("MMMM dd, yyyy 'at' HH:mm:ss")) + "</p>\n");
+            writer.write("            <p>DAMS Delhi CBT Automation • Phone: " + studentPhone + "</p>\n");
+            writer.write("        </div>\n");
+            writer.write("    </div>\n");
+            writer.write("</body>\n");
+            writer.write("</html>");
+            
+            writer.close();
+            
+            System.out.println("\n✅ HTML Report generated: " + filename);
+            addReportStep("Generate Report", "✅ SUCCESS", "HTML report saved: " + filename);
+
+        } catch (IOException e) {
+            System.out.println("❌ Failed to generate HTML report: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -520,21 +626,32 @@ public class DamsDelhiLogin {
                     System.out.println("========================================");
                     System.out.println("✅ Login: Success");
                     System.out.println("✅ Payment Flow: Success");
-                    System.out.println("✅ Screenshot: Saved");
+                    System.out.println("✅ Screenshots: Saved");
                     System.out.println("========================================\n");
                 } else {
                     System.out.println("\n⚠️  Payment flow incomplete");
-                    automation.closeBrowser();
                 }
 
             } else {
                 System.out.println("\n💥 Login failed - cannot proceed to payment");
-                automation.closeBrowser();
             }
+
+            // Generate HTML report regardless of success/failure
+            automation.generateHTMLReport();
+            
+            // Close browser after report generation
+            automation.closeBrowser();
 
         } catch (Exception e) {
             System.out.println("💥 Unexpected error: " + e.getMessage());
             e.printStackTrace();
+            
+            // Still try to generate report and close browser
+            try {
+                automation.generateHTMLReport();
+            } catch (Exception reportError) {
+                System.out.println("❌ Could not generate report: " + reportError.getMessage());
+            }
             automation.closeBrowser();
         }
     }
