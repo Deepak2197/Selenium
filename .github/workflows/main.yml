@@ -8,7 +8,7 @@ on:
         required: false
         default: 'Manual execution'
   schedule:
-    - cron: '0 9 * * *'
+    - cron: '0 9 * * *'  # Daily at 9 AM UTC
   push:
     branches:
       - main
@@ -116,10 +116,10 @@ jobs:
           mkdir -p screenshots
           mkdir -p compiled
           echo "✓ Directories created"
+          ls -la
           
       - name: 🔧 Set ChromeDriver Path
         run: |
-          # ChromeDriver is already in PATH from setup-chrome action
           which chromedriver
           chromedriver --version
           echo "✓ ChromeDriver path verified"
@@ -158,6 +158,7 @@ jobs:
           echo "=== Execution Summary ===" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
+          # Check screenshots
           if [ -d "screenshots" ]; then
             screenshot_count=$(ls -1 screenshots/*.png 2>/dev/null | wc -l)
             echo "- **Screenshots Generated**: $screenshot_count" >> $GITHUB_STEP_SUMMARY
@@ -173,17 +174,27 @@ jobs:
                 fi
               done
             fi
+          else
+            echo "- **Screenshots**: No screenshots directory found ⚠️" >> $GITHUB_STEP_SUMMARY
           fi
           
+          # Check HTML report
           if ls DAMS_CBT_Report_*.html 1> /dev/null 2>&1; then
             report_file=$(ls DAMS_CBT_Report_*.html | head -1)
             report_size=$(du -h "$report_file" | cut -f1)
-            echo "- **HTML Report**: Generated ✅ ($report_size)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- **HTML Report**: ✅ Generated ($report_size)" >> $GITHUB_STEP_SUMMARY
+            echo "  - File: \`$report_file\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- **HTML Report**: ❌ Not found" >> $GITHUB_STEP_SUMMARY
           fi
           
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
           echo "- **Run ID**: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
           
       - name: 📊 Upload Screenshots
         if: always()
@@ -207,14 +218,20 @@ jobs:
         if: failure()
         run: |
           echo "=== Debug Information ==="
+          echo "Current directory:"
           pwd
+          echo ""
+          echo "Root files:"
           ls -la
           echo ""
-          echo "Screenshots:"
-          ls -la screenshots/ || echo "No screenshots"
+          echo "Screenshots directory:"
+          ls -la screenshots/ 2>/dev/null || echo "No screenshots directory"
           echo ""
-          echo "Compiled:"
-          ls -la compiled/ || echo "No compiled"
+          echo "Compiled directory:"
+          ls -la compiled/ 2>/dev/null || echo "No compiled directory"
+          echo ""
+          echo "HTML Reports:"
+          ls -la DAMS_CBT_Report_*.html 2>/dev/null || echo "No HTML reports found"
           echo ""
           echo "Libraries:"
           ls -la lib/ | head -20
@@ -291,35 +308,46 @@ jobs:
                 padding: 40px; 
                 border-radius: 20px; 
                 box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+                margin-bottom: 30px;
               }
-              .report-list h2 { color: #2d3748; margin-bottom: 20px; }
+              .report-list h2 { color: #2d3748; margin-bottom: 20px; font-size: 28px; }
               .report-item { 
-                padding: 15px; 
-                margin: 10px 0; 
+                padding: 20px; 
+                margin: 15px 0; 
                 background: #f7fafc; 
-                border-radius: 10px; 
+                border-radius: 12px; 
                 transition: all 0.3s;
+                border-left: 5px solid #667eea;
               }
               .report-item:hover { 
                 background: #e2e8f0; 
                 transform: translateX(5px);
+                box-shadow: 0 5px 15px rgba(0,0,0,0.1);
               }
               a { 
                 color: #667eea; 
                 text-decoration: none; 
                 font-weight: 600; 
                 display: block;
+                font-size: 18px;
               }
               a:hover { color: #764ba2; }
               .timestamp { 
                 color: #718096; 
                 font-size: 14px; 
-                margin-top: 5px; 
+                margin-top: 8px; 
               }
               .no-reports {
                 text-align: center;
                 color: #718096;
-                padding: 40px;
+                padding: 60px 20px;
+              }
+              .no-reports p { font-size: 18px; margin: 10px 0; }
+              .footer {
+                text-align: center;
+                color: white;
+                font-size: 14px;
+                margin-top: 40px;
               }
             </style>
           </head>
@@ -327,7 +355,7 @@ jobs:
             <div class="container">
               <div class="header">
                 <h1>🎯 DAMS CBT Automation Reports</h1>
-                <p style="color: #718096; margin-top: 10px;">Comprehensive CBT Course Purchase Summary</p>
+                <p style="color: #718096; margin-top: 10px; font-size: 18px;">Comprehensive CBT Course Purchase Summary</p>
               </div>
               <div class="report-list">
                 <h2>📊 Available Reports:</h2>
@@ -340,10 +368,11 @@ jobs:
               if [ -f "$file" ]; then
                 basename=$(basename "$file")
                 filesize=$(du -h "$file" | cut -f1)
+                timestamp=$(date -r "$file" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "Unknown")
                 
                 echo "<div class='report-item'>" >> ./reports/index.html
                 echo "  <a href='$basename'>📄 $basename</a>" >> ./reports/index.html
-                echo "  <div class='timestamp'>Size: $filesize</div>" >> ./reports/index.html
+                echo "  <div class='timestamp'>Size: $filesize | Created: $timestamp</div>" >> ./reports/index.html
                 echo "</div>" >> ./reports/index.html
                 
                 report_found=true
@@ -360,12 +389,17 @@ jobs:
           
           cat >> ./reports/index.html << 'EOF'
               </div>
+              <div class="footer">
+                <p>DAMS Delhi CBT Automation • Powered by GitHub Actions</p>
+              </div>
             </div>
           </body>
           </html>
           EOF
           
           echo "✓ Index page created"
+          echo "Files in reports directory:"
+          ls -la ./reports/
           
       - name: 🚀 Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
