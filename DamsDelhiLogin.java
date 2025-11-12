@@ -557,10 +557,10 @@ public class DamsDelhiLogin {
                 writer.write("            <div class=\"screenshot-grid\">\n");
                 
                 for (String path : screenshotPaths) {
-                    String filename = new File(path).getName();
+                    String screenshotName = new File(path).getName();
                     writer.write("                <div class=\"screenshot-item\">\n");
-                    writer.write("                    <img src=\"" + path + "\" alt=\"" + filename + "\">\n");
-                    writer.write("                    <div class=\"screenshot-label\">" + filename + "</div>\n");
+                    writer.write("                    <img src=\"" + path + "\" alt=\"" + screenshotName + "\">\n");
+                    writer.write("                    <div class=\"screenshot-label\">" + screenshotName + "</div>\n");
                     writer.write("                </div>\n");
                 }
                 
