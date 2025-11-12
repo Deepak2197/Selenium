@@ -40,10 +40,36 @@ public class DamsDelhiLogin {
 
     public DamsDelhiLogin() {
         ChromeOptions options = new ChromeOptions();
-        options.addArguments("--start-maximized");
+        
+        // Check if running in CI environment
+        boolean isCI = System.getenv("CI") != null;
+        
+        if (isCI) {
+            // CI/GitHub Actions specific options
+            options.addArguments("--headless=new");
+            options.addArguments("--window-size=1920,1080");
+            options.addArguments("--no-sandbox");
+            options.addArguments("--disable-dev-shm-usage");
+            options.addArguments("--disable-gpu");
+            options.addArguments("--disable-software-rasterizer");
+            options.addArguments("--disable-extensions");
+            options.addArguments("--disable-setuid-sandbox");
+            options.addArguments("--remote-debugging-port=9222");
+        } else {
+            // Local development options
+            options.addArguments("--start-maximized");
+        }
+        
+        // Common options
         options.addArguments("--disable-blink-features=AutomationControlled");
-        options.addArguments("--no-sandbox");
-        options.addArguments("--disable-dev-shm-usage");
+        options.addArguments("--disable-web-security");
+        options.addArguments("--allow-running-insecure-content");
+        options.addArguments("--ignore-certificate-errors");
+        
+        // Set binary location explicitly for CI
+        if (isCI) {
+            options.setBinary("/usr/bin/google-chrome");
+        }
 
         this.driver = new ChromeDriver(options);
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(15));
@@ -606,9 +632,20 @@ public class DamsDelhiLogin {
     }
 
     public static void testComplete() {
-        DamsDelhiLogin automation = new DamsDelhiLogin();
+        System.out.println("Environment Check:");
+        System.out.println("- CI Environment: " + (System.getenv("CI") != null ? "YES" : "NO"));
+        System.out.println("- Java Version: " + System.getProperty("java.version"));
+        System.out.println("- OS: " + System.getProperty("os.name"));
+        System.out.println("- OS Arch: " + System.getProperty("os.arch"));
+        System.out.println("");
+        
+        DamsDelhiLogin automation = null;
 
         try {
+            System.out.println("Initializing Chrome Driver...");
+            automation = new DamsDelhiLogin();
+            System.out.println("✅ Chrome Driver initialized successfully!");
+            
             boolean loginSuccess = automation.loginToDamsDelhi();
 
             if (loginSuccess) {
@@ -646,13 +683,30 @@ public class DamsDelhiLogin {
             System.out.println("💥 Unexpected error: " + e.getMessage());
             e.printStackTrace();
             
-            // Still try to generate report and close browser
-            try {
-                automation.generateHTMLReport();
-            } catch (Exception reportError) {
-                System.out.println("❌ Could not generate report: " + reportError.getMessage());
+            // Try to generate report even if automation failed
+            if (automation != null) {
+                try {
+                    automation.addReportStep("Fatal Error", "❌ FAILED", "Exception: " + e.getMessage());
+                    automation.generateHTMLReport();
+                } catch (Exception reportError) {
+                    System.out.println("❌ Could not generate report: " + reportError.getMessage());
+                }
+                
+                try {
+                    automation.closeBrowser();
+                } catch (Exception closeError) {
+                    System.out.println("⚠️ Could not close browser: " + closeError.getMessage());
+                }
+            } else {
+                System.out.println("❌ Chrome Driver initialization failed!");
+                System.out.println("Please check:");
+                System.out.println("1. Chrome is installed: google-chrome --version");
+                System.out.println("2. ChromeDriver is installed: chromedriver --version");
+                System.out.println("3. Versions are compatible");
             }
-            automation.closeBrowser();
+            
+            // Exit with error code
+            System.exit(1);
         }
     }
 
