@@ -270,7 +270,7 @@ jobs:
         run: |
           mkdir -p ./reports
           
-          cat > ./reports/index.html << 'EOF'
+          cat > ./reports/index.html << 'INDEXEOF'
           <!DOCTYPE html>
           <html lang="en">
           <head>
@@ -359,7 +359,7 @@ jobs:
               </div>
               <div class="report-list">
                 <h2>📊 Available Reports:</h2>
-          EOF
+          INDEXEOF
           
           report_found=false
           
@@ -368,11 +368,10 @@ jobs:
               if [ -f "$file" ]; then
                 basename=$(basename "$file")
                 filesize=$(du -h "$file" | cut -f1)
-                timestamp=$(date -r "$file" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "Unknown")
                 
                 echo "<div class='report-item'>" >> ./reports/index.html
                 echo "  <a href='$basename'>📄 $basename</a>" >> ./reports/index.html
-                echo "  <div class='timestamp'>Size: $filesize | Created: $timestamp</div>" >> ./reports/index.html
+                echo "  <div class='timestamp'>Size: $filesize</div>" >> ./reports/index.html
                 echo "</div>" >> ./reports/index.html
                 
                 report_found=true
@@ -387,7 +386,7 @@ jobs:
             echo "</div>" >> ./reports/index.html
           fi
           
-          cat >> ./reports/index.html << 'EOF'
+          cat >> ./reports/index.html << 'INDEXEOF'
               </div>
               <div class="footer">
                 <p>DAMS Delhi CBT Automation • Powered by GitHub Actions</p>
@@ -395,7 +394,7 @@ jobs:
             </div>
           </body>
           </html>
-          EOF
+          INDEXEOF
           
           echo "✓ Index page created"
           echo "Files in reports directory:"
