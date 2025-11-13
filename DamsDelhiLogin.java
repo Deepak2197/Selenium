@@ -4,10 +4,7 @@ import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.text.SimpleDateFormat;
@@ -15,9 +12,8 @@ import java.time.Duration;
 import java.util.*;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
-import org.json.*;
 
-public class DamsDelhiLogin {
+public class DamsCompleteSolution {
     private static WebDriver driver;
     private static WebDriverWait wait;
     private static JavascriptExecutor js;
@@ -31,8 +27,8 @@ public class DamsDelhiLogin {
     private static SimpleDateFormat fileFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
     private static String executionStartTime;
     
-    // API data storage
-    private static JSONArray apiCourseData = new JSONArray();
+    // API raw data
+    private static String apiRawData = "";
     
     static class CourseResult {
         String courseName;
@@ -56,15 +52,16 @@ public class DamsDelhiLogin {
             executionStartTime = fileFormat.format(new Date());
 
             System.out.println("╔════════════════════════════════════════════╗");
-            System.out.println("║  DAMS - CBT COURSES API FETCHER           ║");
+            System.out.println("║  DAMS COMPLETE AUTOMATION SOLUTION         ║");
             System.out.println("╚════════════════════════════════════════════╝\n");
 
-            // First, fetch data from API
+            // STEP 1: Fetch API Data and Generate HTML
+            System.out.println("STEP 1: Fetching API Data...");
             fetchAPIData();
-            
-            // Generate HTML page with API data
-            generateAPIDataHTML();
+            generateAPIHTML();
 
+            // STEP 2: Start Selenium Automation
+            System.out.println("\nSTEP 2: Starting Browser Automation...");
             setupDriver();
             login();
             navigateToCBTSectionViaHamburger();
@@ -109,221 +106,273 @@ public class DamsDelhiLogin {
         }
     }
 
+    // ==================== API DATA FETCHING ====================
+    
     private static void fetchAPIData() {
-        System.out.println("Fetching data from API...");
+        System.out.println("📡 Fetching data from API...");
+        StringBuilder response = new StringBuilder();
+        
         try {
             URL url = new URL("https://api.damsdelhi.com/v2_data_model/get_all_plan_by_category_id");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
             conn.setRequestProperty("Accept", "application/json");
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0");
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
             
             int responseCode = conn.getResponseCode();
-            System.out.println("  → API Response Code: " + responseCode);
+            System.out.println("   Response Code: " + responseCode);
             
             if (responseCode == 200) {
                 BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
                 String inputLine;
-                StringBuilder response = new StringBuilder();
                 
                 while ((inputLine = in.readLine()) != null) {
                     response.append(inputLine);
                 }
                 in.close();
                 
-                // Parse JSON response
-                JSONObject jsonResponse = new JSONObject(response.toString());
-                
-                // Check if response has data array
-                if (jsonResponse.has("data")) {
-                    apiCourseData = jsonResponse.getJSONArray("data");
-                    System.out.println("  ✓ Successfully fetched " + apiCourseData.length() + " courses from API");
-                } else if (jsonResponse.has("plans")) {
-                    apiCourseData = jsonResponse.getJSONArray("plans");
-                    System.out.println("  ✓ Successfully fetched " + apiCourseData.length() + " plans from API");
-                } else {
-                    // If structure is different, store entire response
-                    apiCourseData.put(jsonResponse);
-                    System.out.println("  ✓ API data fetched (custom structure)");
-                }
-                
+                apiRawData = response.toString();
+                System.out.println("   ✓ Data fetched successfully");
+                System.out.println("   Data length: " + apiRawData.length() + " characters");
             } else {
-                System.out.println("  ✗ API request failed with code: " + responseCode);
+                System.out.println("   ✗ Failed with response code: " + responseCode);
             }
             
+            conn.disconnect();
+            
         } catch (Exception e) {
-            System.out.println("  ✗ Error fetching API data: " + e.getMessage());
+            System.out.println("   ✗ Error fetching data: " + e.getMessage());
             e.printStackTrace();
         }
     }
-
-    private static void generateAPIDataHTML() {
-        System.out.println("\nGenerating HTML page with API data...");
+    
+    private static void generateAPIHTML() {
+        System.out.println("\n📄 Generating API Data HTML page...");
         
         try {
             String timestamp = fileFormat.format(new Date());
-            String filename = "DAMS_API_Courses_" + timestamp + ".html";
+            String filename = "DAMS_API_Data_" + timestamp + ".html";
             
             StringBuilder html = new StringBuilder();
-            html.append("<!DOCTYPE html>\n<html>\n<head>\n");
-            html.append("<meta charset='UTF-8'>\n");
-            html.append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>\n");
-            html.append("<title>DAMS API Courses Data - ").append(timestamp).append("</title>\n");
-            html.append("<style>\n");
-            html.append("* { margin: 0; padding: 0; box-sizing: border-box; }\n");
-            html.append("body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 40px 20px; }\n");
-            html.append(".container { max-width: 1600px; margin: 0 auto; }\n");
-            html.append(".header { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); text-align: center; }\n");
-            html.append(".header h1 { color: #2d3748; font-size: 42px; font-weight: 700; margin-bottom: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }\n");
-            html.append(".header .subtitle { color: #718096; font-size: 16px; margin-top: 5px; }\n");
-            html.append(".search-box { background: white; border-radius: 20px; padding: 30px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); }\n");
-            html.append(".search-box input { width: 100%; padding: 15px 20px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 16px; transition: all 0.3s; }\n");
-            html.append(".search-box input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }\n");
-            html.append(".courses-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 25px; margin-bottom: 30px; }\n");
-            html.append(".course-card { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); transition: all 0.3s; cursor: pointer; }\n");
-            html.append(".course-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.15); }\n");
-            html.append(".course-card .course-title { font-size: 18px; font-weight: 600; color: #2d3748; margin-bottom: 15px; line-height: 1.4; }\n");
-            html.append(".course-card .course-info { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }\n");
-            html.append(".course-card .info-badge { display: inline-block; padding: 5px 12px; border-radius: 15px; font-size: 12px; font-weight: 600; background: #edf2f7; color: #4a5568; }\n");
-            html.append(".course-card .price { font-size: 24px; font-weight: 700; color: #667eea; margin: 15px 0; }\n");
-            html.append(".course-card .price .original { font-size: 16px; color: #a0aec0; text-decoration: line-through; margin-left: 10px; }\n");
-            html.append(".course-card .description { color: #718096; font-size: 14px; line-height: 1.6; margin-bottom: 15px; max-height: 100px; overflow: hidden; }\n");
-            html.append(".course-card .buy-btn { width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; transition: all 0.3s; }\n");
-            html.append(".course-card .buy-btn:hover { transform: scale(1.02); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }\n");
-            html.append(".stats { background: white; border-radius: 20px; padding: 30px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); text-align: center; }\n");
-            html.append(".stats h2 { color: #2d3748; margin-bottom: 20px; }\n");
-            html.append(".stats .count { font-size: 48px; font-weight: 700; color: #667eea; }\n");
-            html.append(".footer { text-align: center; color: white; margin-top: 40px; padding: 20px; }\n");
-            html.append("@media (max-width: 768px) { .courses-grid { grid-template-columns: 1fr; } .header h1 { font-size: 28px; } }\n");
-            html.append("</style>\n");
-            html.append("<script>\n");
-            html.append("function searchCourses() {\n");
-            html.append("  let input = document.getElementById('searchInput').value.toLowerCase();\n");
-            html.append("  let cards = document.getElementsByClassName('course-card');\n");
-            html.append("  let count = 0;\n");
-            html.append("  for (let i = 0; i < cards.length; i++) {\n");
-            html.append("    let title = cards[i].querySelector('.course-title').textContent.toLowerCase();\n");
-            html.append("    if (title.includes(input)) {\n");
-            html.append("      cards[i].style.display = 'block';\n");
-            html.append("      count++;\n");
-            html.append("    } else {\n");
-            html.append("      cards[i].style.display = 'none';\n");
-            html.append("    }\n");
-            html.append("  }\n");
-            html.append("  document.getElementById('resultCount').textContent = count;\n");
-            html.append("}\n");
-            html.append("</script>\n");
-            html.append("</head>\n<body>\n");
             
-            html.append("<div class='container'>\n");
-            html.append("<div class='header'>\n");
-            html.append("<h1>🎓 DAMS API Courses Database</h1>\n");
-            html.append("<p class='subtitle'>All Available Courses from API</p>\n");
-            html.append("</div>\n");
+            // HTML Document Start
+            html.append("<!DOCTYPE html>\n");
+            html.append("<html lang='en'>\n");
+            html.append("<head>\n");
+            html.append("    <meta charset='UTF-8'>\n");
+            html.append("    <meta name='viewport' content='width=device-width, initial-scale=1.0'>\n");
+            html.append("    <title>DAMS API Data - ").append(timestamp).append("</title>\n");
+            html.append("    <style>\n");
+            html.append("        * { margin: 0; padding: 0; box-sizing: border-box; }\n");
+            html.append("        body {\n");
+            html.append("            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;\n");
+            html.append("            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n");
+            html.append("            min-height: 100vh;\n");
+            html.append("            padding: 40px 20px;\n");
+            html.append("        }\n");
+            html.append("        .container { max-width: 1400px; margin: 0 auto; }\n");
+            html.append("        .header {\n");
+            html.append("            background: white;\n");
+            html.append("            border-radius: 20px;\n");
+            html.append("            padding: 40px;\n");
+            html.append("            margin-bottom: 30px;\n");
+            html.append("            box-shadow: 0 10px 40px rgba(0,0,0,0.1);\n");
+            html.append("            text-align: center;\n");
+            html.append("        }\n");
+            html.append("        .header h1 {\n");
+            html.append("            color: #2d3748;\n");
+            html.append("            font-size: 42px;\n");
+            html.append("            font-weight: 700;\n");
+            html.append("            margin-bottom: 10px;\n");
+            html.append("        }\n");
+            html.append("        .header .subtitle { color: #718096; font-size: 16px; }\n");
+            html.append("        .content-box {\n");
+            html.append("            background: white;\n");
+            html.append("            border-radius: 20px;\n");
+            html.append("            padding: 40px;\n");
+            html.append("            box-shadow: 0 10px 40px rgba(0,0,0,0.1);\n");
+            html.append("            margin-bottom: 30px;\n");
+            html.append("        }\n");
+            html.append("        .content-box h2 { color: #2d3748; margin-bottom: 20px; font-size: 24px; }\n");
+            html.append("        .json-container {\n");
+            html.append("            background: #1e293b;\n");
+            html.append("            color: #e2e8f0;\n");
+            html.append("            padding: 30px;\n");
+            html.append("            border-radius: 15px;\n");
+            html.append("            overflow-x: auto;\n");
+            html.append("            font-family: 'Courier New', monospace;\n");
+            html.append("            font-size: 14px;\n");
+            html.append("            line-height: 1.6;\n");
+            html.append("            max-height: 600px;\n");
+            html.append("            overflow-y: auto;\n");
+            html.append("        }\n");
+            html.append("        .json-container pre {\n");
+            html.append("            margin: 0;\n");
+            html.append("            white-space: pre-wrap;\n");
+            html.append("            word-wrap: break-word;\n");
+            html.append("        }\n");
+            html.append("        .stats {\n");
+            html.append("            display: grid;\n");
+            html.append("            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));\n");
+            html.append("            gap: 20px;\n");
+            html.append("            margin-bottom: 30px;\n");
+            html.append("        }\n");
+            html.append("        .stat-card {\n");
+            html.append("            background: white;\n");
+            html.append("            border-radius: 15px;\n");
+            html.append("            padding: 25px;\n");
+            html.append("            box-shadow: 0 5px 20px rgba(0,0,0,0.1);\n");
+            html.append("            text-align: center;\n");
+            html.append("        }\n");
+            html.append("        .stat-card .label {\n");
+            html.append("            color: #718096;\n");
+            html.append("            font-size: 14px;\n");
+            html.append("            margin-bottom: 10px;\n");
+            html.append("            text-transform: uppercase;\n");
+            html.append("            letter-spacing: 1px;\n");
+            html.append("        }\n");
+            html.append("        .stat-card .value { color: #667eea; font-size: 36px; font-weight: 700; }\n");
+            html.append("        .copy-btn {\n");
+            html.append("            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n");
+            html.append("            color: white;\n");
+            html.append("            border: none;\n");
+            html.append("            padding: 12px 30px;\n");
+            html.append("            border-radius: 10px;\n");
+            html.append("            font-size: 16px;\n");
+            html.append("            font-weight: 600;\n");
+            html.append("            cursor: pointer;\n");
+            html.append("            margin-bottom: 20px;\n");
+            html.append("            transition: all 0.3s;\n");
+            html.append("        }\n");
+            html.append("        .copy-btn:hover {\n");
+            html.append("            transform: translateY(-2px);\n");
+            html.append("            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);\n");
+            html.append("        }\n");
+            html.append("        .footer { text-align: center; color: white; padding: 20px; font-size: 14px; }\n");
+            html.append("        @media (max-width: 768px) {\n");
+            html.append("            .header h1 { font-size: 28px; }\n");
+            html.append("            .content-box { padding: 25px 20px; }\n");
+            html.append("        }\n");
+            html.append("    </style>\n");
+            html.append("</head>\n");
+            html.append("<body>\n");
+            html.append("    <div class='container'>\n");
             
-            html.append("<div class='search-box'>\n");
-            html.append("<input type='text' id='searchInput' placeholder='🔍 Search courses...' onkeyup='searchCourses()'>\n");
-            html.append("</div>\n");
+            // Header
+            html.append("        <div class='header'>\n");
+            html.append("            <h1>🎓 DAMS API Complete Data</h1>\n");
+            html.append("            <p class='subtitle'>Full API Response from get_all_plan_by_category_id</p>\n");
+            html.append("            <p class='subtitle' style='margin-top: 10px; font-weight: 600;'>")
+                .append(new SimpleDateFormat("dd MMM yyyy, HH:mm:ss").format(new Date()))
+                .append("</p>\n");
+            html.append("        </div>\n");
             
-            html.append("<div class='stats'>\n");
-            html.append("<h2>Total Courses Available</h2>\n");
-            html.append("<div class='count' id='resultCount'>").append(apiCourseData.length()).append("</div>\n");
-            html.append("</div>\n");
+            // Stats
+            html.append("        <div class='stats'>\n");
+            html.append("            <div class='stat-card'>\n");
+            html.append("                <div class='label'>Data Size</div>\n");
+            html.append("                <div class='value'>").append(String.format("%.2f", apiRawData.length() / 1024.0)).append(" KB</div>\n");
+            html.append("            </div>\n");
+            html.append("            <div class='stat-card'>\n");
+            html.append("                <div class='label'>Characters</div>\n");
+            html.append("                <div class='value'>").append(apiRawData.length()).append("</div>\n");
+            html.append("            </div>\n");
+            html.append("            <div class='stat-card'>\n");
+            html.append("                <div class='label'>Status</div>\n");
+            html.append("                <div class='value' style='font-size: 18px; color: #48bb78;'>✓ Success</div>\n");
+            html.append("            </div>\n");
+            html.append("        </div>\n");
             
-            html.append("<div class='courses-grid'>\n");
+            // Content Box
+            html.append("        <div class='content-box'>\n");
+            html.append("            <h2>📊 Complete API Response</h2>\n");
+            html.append("            <button class='copy-btn' onclick='copyToClipboard()'>📋 Copy JSON Data</button>\n");
+            html.append("            <div class='json-container' id='jsonData'>\n");
+            html.append("                <pre>").append(escapeHtml(formatJSON(apiRawData))).append("</pre>\n");
+            html.append("            </div>\n");
+            html.append("        </div>\n");
             
-            // Generate course cards from API data
-            for (int i = 0; i < apiCourseData.length(); i++) {
-                try {
-                    JSONObject course = apiCourseData.getJSONObject(i);
-                    
-                    html.append("<div class='course-card'>\n");
-                    
-                    // Course Title
-                    String title = course.optString("title", course.optString("name", "Course " + (i+1)));
-                    html.append("<div class='course-title'>").append(escapeHtml(title)).append("</div>\n");
-                    
-                    // Course Info badges
-                    html.append("<div class='course-info'>\n");
-                    
-                    if (course.has("category")) {
-                        html.append("<span class='info-badge'>📚 ").append(escapeHtml(course.getString("category"))).append("</span>\n");
-                    }
-                    
-                    if (course.has("duration")) {
-                        html.append("<span class='info-badge'>⏱️ ").append(escapeHtml(course.getString("duration"))).append("</span>\n");
-                    }
-                    
-                    if (course.has("level")) {
-                        html.append("<span class='info-badge'>📊 ").append(escapeHtml(course.getString("level"))).append("</span>\n");
-                    }
-                    
-                    if (course.has("type")) {
-                        html.append("<span class='info-badge'>🎯 ").append(escapeHtml(course.getString("type"))).append("</span>\n");
-                    }
-                    
-                    html.append("</div>\n");
-                    
-                    // Price
-                    if (course.has("price") || course.has("amount")) {
-                        html.append("<div class='price'>\n");
-                        String price = course.optString("price", course.optString("amount", "N/A"));
-                        html.append("₹").append(escapeHtml(price));
-                        
-                        if (course.has("original_price") || course.has("mrp")) {
-                            String originalPrice = course.optString("original_price", course.optString("mrp", ""));
-                            if (!originalPrice.isEmpty()) {
-                                html.append("<span class='original'>₹").append(escapeHtml(originalPrice)).append("</span>");
-                            }
-                        }
-                        html.append("</div>\n");
-                    }
-                    
-                    // Description
-                    if (course.has("description")) {
-                        html.append("<div class='description'>").append(escapeHtml(course.getString("description"))).append("</div>\n");
-                    }
-                    
-                    // Additional details
-                    if (course.has("validity")) {
-                        html.append("<p style='color: #718096; font-size: 13px; margin: 10px 0;'>⏳ Validity: ").append(escapeHtml(course.getString("validity"))).append("</p>\n");
-                    }
-                    
-                    if (course.has("tests_count") || course.has("total_tests")) {
-                        String tests = course.optString("tests_count", course.optString("total_tests", ""));
-                        html.append("<p style='color: #718096; font-size: 13px; margin: 10px 0;'>📝 Tests: ").append(escapeHtml(tests)).append("</p>\n");
-                    }
-                    
-                    html.append("<button class='buy-btn'>🛒 View Details</button>\n");
-                    html.append("</div>\n");
-                    
-                } catch (Exception e) {
-                    System.out.println("  ⚠ Error processing course " + i + ": " + e.getMessage());
-                }
-            }
+            // Footer
+            html.append("        <div class='footer'>\n");
+            html.append("            <p>🤖 Generated from DAMS API</p>\n");
+            html.append("            <p>🔗 API URL: https://api.damsdelhi.com/v2_data_model/get_all_plan_by_category_id</p>\n");
+            html.append("        </div>\n");
+            html.append("    </div>\n");
             
-            html.append("</div>\n");
+            // JavaScript
+            html.append("    <script>\n");
+            html.append("        function copyToClipboard() {\n");
+            html.append("            const jsonText = document.getElementById('jsonData').innerText;\n");
+            html.append("            navigator.clipboard.writeText(jsonText).then(function() {\n");
+            html.append("                alert('✅ JSON data copied to clipboard!');\n");
+            html.append("            }).catch(function(err) {\n");
+            html.append("                console.error('Copy failed:', err);\n");
+            html.append("            });\n");
+            html.append("        }\n");
+            html.append("    </script>\n");
+            html.append("</body>\n");
+            html.append("</html>");
             
-            html.append("<div class='footer'>\n");
-            html.append("<p>🤖 Data fetched from DAMS API</p>\n");
-            html.append("<p>📅 Generated: ").append(new SimpleDateFormat("dd MMM yyyy, HH:mm:ss").format(new Date())).append("</p>\n");
-            html.append("</div>\n");
-            
-            html.append("</div>\n");
-            html.append("</body>\n</html>");
-            
+            // Write to file
             FileWriter writer = new FileWriter(filename);
             writer.write(html.toString());
             writer.close();
             
-            System.out.println("✓ API data HTML saved: " + filename);
-            System.out.println("  → Total courses displayed: " + apiCourseData.length());
+            System.out.println("   ✓ API HTML page created: " + filename);
+            System.out.println("   File size: " + (html.length() / 1024) + " KB");
             
         } catch (Exception e) {
-            System.out.println("✗ HTML generation failed: " + e.getMessage());
+            System.out.println("   ✗ Error creating HTML: " + e.getMessage());
             e.printStackTrace();
         }
     }
+    
+    private static String formatJSON(String json) {
+        try {
+            StringBuilder formatted = new StringBuilder();
+            int indent = 0;
+            boolean inString = false;
+            
+            for (int i = 0; i < json.length(); i++) {
+                char c = json.charAt(i);
+                
+                if (c == '"' && (i == 0 || json.charAt(i-1) != '\\')) {
+                    inString = !inString;
+                }
+                
+                if (!inString) {
+                    if (c == '{' || c == '[') {
+                        formatted.append(c).append('\n');
+                        indent++;
+                        formatted.append("  ".repeat(indent));
+                    } else if (c == '}' || c == ']') {
+                        formatted.append('\n');
+                        indent--;
+                        formatted.append("  ".repeat(indent));
+                        formatted.append(c);
+                    } else if (c == ',') {
+                        formatted.append(c).append('\n');
+                        formatted.append("  ".repeat(indent));
+                    } else if (c == ':') {
+                        formatted.append(c).append(' ');
+                    } else {
+                        formatted.append(c);
+                    }
+                } else {
+                    formatted.append(c);
+                }
+            }
+            
+            return formatted.toString();
+        } catch (Exception e) {
+            return json;
+        }
+    }
 
+    // ==================== SELENIUM AUTOMATION ====================
+    
     private static void setupDriver() {
         System.out.println("Setting up Chrome driver...");
         
@@ -416,7 +465,7 @@ public class DamsDelhiLogin {
                 System.out.println("  ✓ Clicked: Course Dropdown");
                 sleep(3);
             } catch (Exception e) {
-                System.out.println("  ⚠ Skipping dropdown: " + e.getMessage());
+                System.out.println("  ⚠ Skipping dropdown");
             }
             
             try {
@@ -455,13 +504,10 @@ public class DamsDelhiLogin {
                 hamburgerClicked = true;
                 sleep(3);
             } catch (Exception e) {
-                System.out.println("  ✗ Failed to click hamburger: " + e.getMessage());
+                System.out.println("  ✗ Failed to click hamburger");
             }
             
-            if (!hamburgerClicked) {
-                System.out.println("  ✗ Could not open hamburger menu!");
-                return;
-            }
+            if (!hamburgerClicked) return;
             
             boolean cbtClicked = false;
             By[] cbtSelectors = {
@@ -490,15 +536,10 @@ public class DamsDelhiLogin {
                         }
                     }
                     if (cbtClicked) break;
-                } catch (Exception e) {
-                    System.out.println("    Trying next selector...");
-                }
+                } catch (Exception e) {}
             }
             
-            if (!cbtClicked) {
-                System.out.println("  ✗ Could not click CBT button!");
-                return;
-            }
+            if (!cbtClicked) return;
             
             try {
                 WebElement okBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
@@ -506,17 +547,16 @@ public class DamsDelhiLogin {
                 js.executeScript("arguments[0].scrollIntoView({block: 'center'});", okBtn);
                 sleep(1);
                 js.executeScript("arguments[0].click();", okBtn);
-                System.out.println("  ✓ Clicked: OK Button (Red)");
+                System.out.println("  ✓ Clicked: OK Button");
                 sleep(3);
             } catch (Exception e) {
-                System.out.println("  ℹ No OK button to click");
+                System.out.println("  ℹ No OK button");
             }
             
             System.out.println("✓ Successfully navigated to CBT section\n");
             
         } catch (Exception e) {
-            System.out.println("✗ Error navigating to CBT section: " + e.getMessage());
-            e.printStackTrace();
+            System.out.println("✗ Error: " + e.getMessage());
         }
     }
 
@@ -525,16 +565,13 @@ public class DamsDelhiLogin {
         List<String> courses = new ArrayList<>();
         
         try {
-            System.out.println("  → Waiting for CBT page to load completely...");
             sleep(5);
-            
             js.executeScript("window.scrollTo(0, 0);");
             sleep(2);
             
             long lastHeight = (Long) js.executeScript("return document.body.scrollHeight");
             int stableCount = 0;
             
-            System.out.println("  → Scrolling to load all courses...");
             while (stableCount < 3) {
                 js.executeScript("window.scrollBy(0, 500);");
                 sleep(1);
@@ -556,12 +593,11 @@ public class DamsDelhiLogin {
             System.out.println("  → Found " + buyNowButtons.size() + " Buy Now buttons");
             
             if (buyNowButtons.isEmpty()) {
-                System.out.println("  ✗ No Buy Now buttons found!");
                 return courses;
             }
             
             int coursesToProcess = Math.min(3, buyNowButtons.size());
-            System.out.println("  → Processing EXACTLY " + coursesToProcess + " courses (LIMITED TO 3)");
+            System.out.println("  → Processing " + coursesToProcess + " courses (LIMITED TO 3)");
             
             for (int i = 0; i < coursesToProcess; i++) {
                 WebElement button = buyNowButtons.get(i);
@@ -570,87 +606,30 @@ public class DamsDelhiLogin {
                     sleep(1);
                     
                     WebElement container = button.findElement(By.xpath("./ancestor::div[contains(@class, 'col')]"));
-                    
-                    String courseName = "";
+                    String courseName = "CBT Course " + (i + 1);
                     
                     try {
                         WebElement titleElem = container.findElement(
-                            By.xpath(".//h3 | .//h4 | .//h5 | .//*[contains(@class, 'title') or contains(@class, 'heading')]"));
-                        courseName = titleElem.getText().trim();
-                        System.out.println("  → Method 1: Found title: " + courseName);
+                            By.xpath(".//h3 | .//h4 | .//h5 | .//*[contains(@class, 'title')]"));
+                        String title = titleElem.getText().trim();
+                        if (!title.isEmpty() && title.length() > 10) {
+                            courseName = title;
+                        }
                     } catch (Exception e) {}
                     
-                    if (courseName.isEmpty()) {
-                        try {
-                            WebElement linkElem = container.findElement(
-                                By.xpath(".//a[string-length(normalize-space(text())) > 15]"));
-                            courseName = linkElem.getText().trim();
-                            System.out.println("  → Method 2: Found link text: " + courseName);
-                        } catch (Exception e) {}
-                    }
-                    
-                    if (courseName.isEmpty()) {
-                        String allText = container.getText();
-                        String[] lines = allText.split("\n");
-                        for (String line : lines) {
-                            line = line.trim();
-                            if (isValidCBTCourseName(line)) {
-                                courseName = line;
-                                System.out.println("  → Method 3: Found from text: " + courseName);
-                                break;
-                            }
-                        }
-                    }
-                    
-                    if (!courseName.isEmpty() && isValidCBTCourseName(courseName)) {
-                        courses.add(courseName);
-                        System.out.println("  ✓ Found course: " + courseName);
-                    } else {
-                        courseName = "CBT Course " + (i + 1);
-                        courses.add(courseName);
-                        System.out.println("  → Using generic name: " + courseName);
-                    }
+                    courses.add(courseName);
+                    System.out.println("  ✓ Found course: " + courseName);
                 } catch (Exception e) {
-                    System.out.println("  ⚠ Skipped course " + (i + 1) + ": " + e.getMessage());
+                    System.out.println("  ⚠ Skipped course " + (i + 1));
                 }
             }
             
-            List<String> uniqueCourses = new ArrayList<>(new LinkedHashSet<>(courses));
-            return uniqueCourses;
+            return new ArrayList<>(new LinkedHashSet<>(courses));
             
         } catch (Exception e) {
-            System.out.println("✗ Error discovering courses: " + e.getMessage());
-            e.printStackTrace();
+            System.out.println("✗ Error: " + e.getMessage());
             return courses;
         }
-    }
-
-    private static boolean isValidCBTCourseName(String text) {
-        if (text == null || text.length() < 10) return false;
-        
-        String lower = text.toLowerCase();
-        
-        if (!lower.contains("all india") && !lower.contains("dams") && 
-            !lower.contains("neet") && !lower.contains("mds") && 
-            !lower.contains("fmge") && !lower.contains("combo") && 
-            !lower.contains("cbt") && !lower.contains("test")) {
-            return false;
-        }
-        
-        String[] invalid = {
-            "test instructions", "buy now", "registration", "exam date", 
-            "noida", "delhi", "select", "choose", "click here", "view details",
-            "registration last date", "download app", "app store", "google play",
-            "view qr", "screenshot"
-        };
-        
-        for (String term : invalid) {
-            if (lower.equals(term) || lower.contains("₹")) {
-                return false;
-            }
-        }
-        
-        return true;
     }
 
     private static void processCBTCourse(String courseName, int courseIndex) {
@@ -670,26 +649,22 @@ public class DamsDelhiLogin {
                 System.out.println("  ✓ Step 1: Clicked Buy Now");
                 sleep(3);
             } else {
-                throw new Exception("Buy button not found for index " + courseIndex);
+                throw new Exception("Buy button not found");
             }
             
             try {
                 WebElement cbtModal = wait.until(ExpectedConditions.visibilityOfElementLocated(
                     By.xpath("//div[@class='popup' and .//div[@id='cbt_hide']]")));
-                System.out.println("  ✓ CBT Modal detected");
-                
                 WebElement cbtRadioLabel = cbtModal.findElement(
                     By.xpath(".//label[contains(normalize-space(), 'CBT (Center Based Test)')]"));
                 js.executeScript("arguments[0].click();", cbtRadioLabel);
-                System.out.println("  ✓ Clicked 'CBT (Center Based Test)'");
+                System.out.println("  ✓ Clicked CBT option");
                 sleep(1);
                 
-                WebElement modalOkButton = cbtModal.findElement(
-                    By.xpath(".//button[normalize-space()='OK']"));
+                WebElement modalOkButton = cbtModal.findElement(By.xpath(".//button[normalize-space()='OK']"));
                 js.executeScript("arguments[0].click();", modalOkButton);
-                System.out.println("  ✓ Clicked OK on CBT modal");
+                System.out.println("  ✓ Clicked OK");
                 sleep(3);
-                
             } catch (Exception e) {
                 System.out.println("  ℹ CBT Modal skipped");
             }
@@ -733,16 +708,13 @@ public class DamsDelhiLogin {
                 By[] paytmSelectors = {
                     By.xpath("//label[.//span[contains(text(), 'Paytm')]]"),
                     By.xpath("//span[contains(text(), 'Paytm')]/ancestor::label"),
-                    By.xpath("//input[@value='paytm']/parent::label"),
-                    By.xpath("//*[contains(text(), 'Paytm')]")
+                    By.xpath("//input[@value='paytm']/parent::label")
                 };
                 
                 for (By selector : paytmSelectors) {
                     try {
                         paytm = wait.until(ExpectedConditions.presenceOfElementLocated(selector));
-                        if (paytm.isDisplayed()) {
-                            break;
-                        }
+                        if (paytm.isDisplayed()) break;
                     } catch (Exception e) {}
                 }
                 
@@ -759,16 +731,13 @@ public class DamsDelhiLogin {
                 WebElement paymentBtn = null;
                 By[] paymentSelectors = {
                     By.xpath("//button[@type='button' and contains(@class, 'ant-btn-primary') and contains(@class, 'ant-btn-block')]"),
-                    By.xpath("//button[contains(text(), 'Pay') or contains(text(), 'Proceed')]"),
-                    By.xpath("//button[contains(@class, 'btn-primary') and contains(@class, 'btn-block')]")
+                    By.xpath("//button[contains(text(), 'Pay') or contains(text(), 'Proceed')]")
                 };
                 
                 for (By selector : paymentSelectors) {
                     try {
                         paymentBtn = wait.until(ExpectedConditions.presenceOfElementLocated(selector));
-                        if (paymentBtn.isDisplayed()) {
-                            break;
-                        }
+                        if (paymentBtn.isDisplayed()) break;
                     } catch (Exception e) {}
                 }
                 
@@ -781,11 +750,11 @@ public class DamsDelhiLogin {
                 System.out.println("  ⚠ Payment button issue");
             }
             
-            System.out.println("  ⏳ Step 7: Waiting for QR code (max 60s)...");
+            System.out.println("  ⏳ Step 7: Waiting for QR code...");
             WebDriverWait qrWait = new WebDriverWait(driver, Duration.ofSeconds(60));
             
             try {
-                By qrLocator = By.xpath("//canvas | //img[contains(@class, 'qr') or contains(@class, 'QR') or contains(@src, 'data:image')]");
+                By qrLocator = By.xpath("//canvas | //img[contains(@class, 'qr') or contains(@class, 'QR')]");
                 qrWait.until(ExpectedConditions.presenceOfElementLocated(qrLocator));
                 System.out.println("  ✓ QR code detected");
                 sleep(2);
@@ -813,72 +782,37 @@ public class DamsDelhiLogin {
             errorMsg = e.getMessage();
             courseResults.add(new CourseResult(courseName, "FAILED", timestamp, screenshotPath, errorMsg));
             totalFailed++;
-            System.out.println("  ❌ Course processing failed: " + errorMsg);
-            e.printStackTrace();
+            System.out.println("  ❌ Failed: " + errorMsg);
         }
     }
 
     private static void returnToCBTSection() {
         try {
             System.out.println("\n  → Returning to CBT section...");
-            
             driver.get("https://www.damsdelhi.com/");
             sleep(3);
             
-            boolean hamburgerClicked = false;
-            try {
-                WebElement hamburger = wait.until(ExpectedConditions.presenceOfElementLocated(
-                    By.className("humburgerIcon")));
-                js.executeScript("arguments[0].click();", hamburger);
-                System.out.println("  ✓ Clicked Hamburger");
-                hamburgerClicked = true;
-                sleep(2);
-            } catch (Exception e) {
-                System.out.println("  ✗ Failed hamburger");
+            WebElement hamburger = wait.until(ExpectedConditions.presenceOfElementLocated(
+                By.className("humburgerIcon")));
+            js.executeScript("arguments[0].click();", hamburger);
+            sleep(2);
+            
+            List<WebElement> cbtElements = driver.findElements(
+                By.xpath("//div[contains(@class, 'Categories')]//div[contains(text(), 'CBT')]"));
+            for (WebElement cbtElem : cbtElements) {
+                if (cbtElem.isDisplayed() && cbtElem.getText().trim().equals("CBT")) {
+                    js.executeScript("arguments[0].click();", cbtElem);
+                    sleep(2);
+                    break;
+                }
             }
             
-            if (!hamburgerClicked) return;
-            
-            boolean cbtClicked = false;
-            By[] cbtSelectors = {
-                By.xpath("//div[contains(@class, 'Categories')]//div[contains(text(), 'CBT')]"),
-                By.xpath("//div[contains(@class, 'Categories')]//*[contains(text(), 'CBT')]"),
-                By.xpath("//*[contains(text(), 'CBT') and not(contains(text(), 'NEET'))]")
-            };
-            
-            for (By selector : cbtSelectors) {
-                try {
-                    List<WebElement> cbtElements = driver.findElements(selector);
-                    for (WebElement cbtElem : cbtElements) {
-                        if (cbtElem.isDisplayed() && cbtElem.getText().trim().equals("CBT")) {
-                            js.executeScript("arguments[0].click();", cbtElem);
-                            System.out.println("  ✓ Clicked CBT");
-                            cbtClicked = true;
-                            sleep(2);
-                            break;
-                        }
-                    }
-                    if (cbtClicked) break;
-                } catch (Exception e) {}
-            }
-            
-            if (!cbtClicked) {
-                System.out.println("  ✗ Failed to click CBT");
-                return;
-            }
-            
-            try {
-                WebElement okBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
-                    By.xpath("//button[@type='button' and contains(@class, 'btn-danger') and contains(text(), 'OK')]")));
-                js.executeScript("arguments[0].click();", okBtn);
-                System.out.println("  ✓ Clicked OK Button");
-                sleep(3);
-            } catch (Exception e) {
-                System.out.println("  ✗ Failed OK button");
-            }
-            
+            WebElement okBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
+                By.xpath("//button[@type='button' and contains(@class, 'btn-danger') and contains(text(), 'OK')]")));
+            js.executeScript("arguments[0].click();", okBtn);
+            sleep(3);
         } catch (Exception e) {
-            System.out.println("  ⚠ Error returning to CBT: " + e.getMessage());
+            System.out.println("  ⚠ Error: " + e.getMessage());
         }
     }
 
@@ -886,51 +820,30 @@ public class DamsDelhiLogin {
         try {
             By[] closeSelectors = {
                 By.xpath("//span[contains(@class, 'ptm-cross') and @id='app-close-btn']"),
-                By.id("app-close-btn"),
-                By.xpath("//span[contains(@class, 'ptm-cross')]")
+                By.id("app-close-btn")
             };
             
             for (By selector : closeSelectors) {
                 try {
                     WebElement closeBtn = driver.findElement(selector);
                     js.executeScript("arguments[0].click();", closeBtn);
-                    System.out.println("  ✓ Closed payment window");
                     sleep(8);
                     break;
                 } catch (Exception e) {}
             }
             
-            By[] skipSelectors = {
-                By.xpath("//button[contains(@class, 'ptm-feedback-btn') and contains(text(), 'Skip')]"),
-                By.xpath("//button[contains(text(), 'Skip')]")
-            };
+            try {
+                WebElement skipBtn = driver.findElement(By.xpath("//button[contains(text(), 'Skip')]"));
+                js.executeScript("arguments[0].click();", skipBtn);
+                sleep(2);
+            } catch (Exception e) {}
             
-            for (By selector : skipSelectors) {
-                try {
-                    WebElement skipBtn = driver.findElement(selector);
-                    js.executeScript("arguments[0].click();", skipBtn);
-                    sleep(2);
-                    break;
-                } catch (Exception e) {}
-            }
-            
-            By[] modalSelectors = {
-                By.xpath("//span[contains(@class, 'ant-modal-close-x')]"),
-                By.xpath("//button[contains(@class, 'ant-modal-close')]")
-            };
-            
-            for (By selector : modalSelectors) {
-                try {
-                    WebElement modalBtn = driver.findElement(selector);
-                    js.executeScript("arguments[0].click();", modalBtn);
-                    sleep(2);
-                    break;
-                } catch (Exception e) {}
-            }
-            
-        } catch (Exception e) {
-            System.out.println("  ⚠ Issue closing payment");
-        }
+            try {
+                WebElement modalBtn = driver.findElement(By.xpath("//span[contains(@class, 'ant-modal-close-x')]"));
+                js.executeScript("arguments[0].click();", modalBtn);
+                sleep(2);
+            } catch (Exception e) {}
+        } catch (Exception e) {}
     }
 
     private static void clickElement(By locator, String name) {
@@ -941,7 +854,7 @@ public class DamsDelhiLogin {
             js.executeScript("arguments[0].click();", elem);
             System.out.println("  ✓ Clicked: " + name);
         } catch (Exception e) {
-            System.out.println("  ✗ Failed to click: " + name);
+            System.out.println("  ✗ Failed: " + name);
         }
     }
 
@@ -952,7 +865,7 @@ public class DamsDelhiLogin {
             elem.sendKeys(text);
             System.out.println("  ✓ Entered: " + fieldName);
         } catch (Exception e) {
-            System.out.println("  ✗ Failed to enter: " + fieldName);
+            System.out.println("  ✗ Failed: " + fieldName);
         }
     }
 
@@ -969,7 +882,7 @@ public class DamsDelhiLogin {
     }
 
     private static void generateDetailedReport() {
-        System.out.println("\nGenerating detailed HTML report...");
+        System.out.println("\nGenerating automation report...");
         
         try {
             String timestamp = fileFormat.format(new Date());
@@ -982,130 +895,100 @@ public class DamsDelhiLogin {
             html.append("<!DOCTYPE html>\n<html>\n<head>\n");
             html.append("<meta charset='UTF-8'>\n");
             html.append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>\n");
-            html.append("<title>DAMS CBT Automation Report - ").append(timestamp).append("</title>\n");
+            html.append("<title>DAMS CBT Report - ").append(timestamp).append("</title>\n");
             html.append("<style>\n");
             html.append("* { margin: 0; padding: 0; box-sizing: border-box; }\n");
             html.append("body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 40px 20px; }\n");
             html.append(".container { max-width: 1400px; margin: 0 auto; }\n");
             html.append(".header { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); text-align: center; }\n");
-            html.append(".header h1 { color: #2d3748; font-size: 42px; font-weight: 700; margin-bottom: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }\n");
-            html.append(".header .subtitle { color: #718096; font-size: 16px; margin-top: 5px; }\n");
-            html.append(".header .timestamp { color: #a0aec0; font-size: 14px; margin-top: 10px; font-weight: 600; }\n");
+            html.append(".header h1 { color: #2d3748; font-size: 42px; font-weight: 700; margin-bottom: 10px; }\n");
             html.append(".summary { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); }\n");
-            html.append(".summary h2 { color: #2d3748; font-size: 28px; font-weight: 600; margin-bottom: 25px; }\n");
             html.append(".stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 25px; }\n");
-            html.append(".stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 15px; box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4); }\n");
-            html.append(".stat-card .label { font-size: 14px; opacity: 0.9; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }\n");
+            html.append(".stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 15px; }\n");
+            html.append(".stat-card .label { font-size: 14px; opacity: 0.9; margin-bottom: 10px; text-transform: uppercase; }\n");
             html.append(".stat-card .value { font-size: 48px; font-weight: 700; }\n");
             html.append(".stat-card.success { background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); }\n");
             html.append(".stat-card.failed { background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%); }\n");
-            html.append(".stat-card.rate { background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%); }\n");
-            html.append(".info-section { background: #f7fafc; border-left: 4px solid #667eea; padding: 20px; border-radius: 10px; margin-top: 20px; }\n");
-            html.append(".info-section p { color: #4a5568; margin: 8px 0; line-height: 1.6; }\n");
-            html.append(".info-section strong { color: #2d3748; }\n");
             html.append(".results { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); }\n");
-            html.append(".results h2 { color: #2d3748; font-size: 28px; font-weight: 600; margin-bottom: 25px; }\n");
-            html.append(".table-wrapper { overflow-x: auto; }\n");
-            html.append("table { width: 100%; border-collapse: collapse; min-width: 800px; }\n");
+            html.append("table { width: 100%; border-collapse: collapse; }\n");
             html.append("thead { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }\n");
-            html.append("th { padding: 15px; text-align: left; font-weight: 600; text-transform: uppercase; font-size: 12px; letter-spacing: 1px; }\n");
-            html.append("tbody tr { border-bottom: 1px solid #e2e8f0; transition: all 0.3s; }\n");
-            html.append("tbody tr:hover { background: #f7fafc; transform: scale(1.01); }\n");
-            html.append("td { padding: 15px; vertical-align: top; }\n");
-            html.append(".course-name { font-weight: 600; color: #2d3748; max-width: 400px; }\n");
-            html.append(".status-badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; }\n");
-            html.append(".status-success { background: #c6f6d5; color: #22543d; }\n");
-            html.append(".status-failed { background: #fed7d7; color: #742a2a; }\n");
-            html.append(".screenshot-link { color: #667eea; text-decoration: none; font-weight: 600; padding: 8px 16px; background: #edf2f7; border-radius: 8px; display: inline-block; transition: all 0.3s; }\n");
-            html.append(".screenshot-link:hover { background: #667eea; color: white; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); }\n");
-            html.append(".error-msg { color: #e53e3e; font-size: 12px; font-style: italic; background: #fff5f5; padding: 8px 12px; border-radius: 6px; display: inline-block; max-width: 300px; }\n");
-            html.append(".no-data { color: #a0aec0; font-style: italic; }\n");
-            html.append(".timestamp-cell { color: #718096; font-size: 13px; white-space: nowrap; }\n");
-            html.append(".index-cell { font-weight: 700; color: #667eea; font-size: 16px; }\n");
-            html.append(".footer { text-align: center; color: white; margin-top: 40px; padding: 20px; }\n");
-            html.append(".footer p { opacity: 0.9; margin: 5px 0; }\n");
-            html.append("@media (max-width: 768px) { .summary, .results { padding: 25px 20px; } .stat-card .value { font-size: 36px; } table { font-size: 14px; } th, td { padding: 10px; } }\n");
+            html.append("th { padding: 15px; text-align: left; font-weight: 600; }\n");
+            html.append("td { padding: 15px; border-bottom: 1px solid #e2e8f0; }\n");
+            html.append(".status-success { background: #c6f6d5; color: #22543d; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }\n");
+            html.append(".status-failed { background: #fed7d7; color: #742a2a; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }\n");
+            html.append(".screenshot-link { color: #667eea; text-decoration: none; font-weight: 600; }\n");
+            html.append(".footer { text-align: center; color: white; padding: 20px; }\n");
             html.append("</style>\n</head>\n<body>\n");
             
             html.append("<div class='container'>\n");
             html.append("<div class='header'>\n");
             html.append("<h1>🎯 DAMS CBT Automation Report</h1>\n");
-            html.append("<p class='subtitle'>Comprehensive CBT Course Purchase Summary</p>\n");
-            html.append("<p class='timestamp'>Generated: ").append(new SimpleDateFormat("dd MMM yyyy, HH:mm:ss").format(new Date())).append("</p>\n");
+            html.append("<p style='color: #718096; margin-top: 10px;'>")
+                .append(new SimpleDateFormat("dd MMM yyyy, HH:mm:ss").format(new Date()))
+                .append("</p>\n");
             html.append("</div>\n");
             
             html.append("<div class='summary'>\n");
-            html.append("<h2>📊 Execution Summary</h2>\n");
+            html.append("<h2 style='color: #2d3748; margin-bottom: 25px;'>📊 Summary</h2>\n");
             html.append("<div class='stats-grid'>\n");
-            
-            html.append("<div class='stat-card'>\n");
-            html.append("<div class='label'>Total Courses</div>\n");
-            html.append("<div class='value'>").append(courseResults.size()).append("</div>\n");
-            html.append("</div>\n");
-            
-            html.append("<div class='stat-card success'>\n");
-            html.append("<div class='label'>Successful</div>\n");
-            html.append("<div class='value'>").append(totalSuccessful).append("</div>\n");
-            html.append("</div>\n");
-            
-            html.append("<div class='stat-card failed'>\n");
-            html.append("<div class='label'>Failed</div>\n");
-            html.append("<div class='value'>").append(totalFailed).append("</div>\n");
-            html.append("</div>\n");
-            
-            html.append("<div class='stat-card rate'>\n");
-            html.append("<div class='label'>Success Rate</div>\n");
-            html.append("<div class='value'>").append(String.format("%.1f", successRate)).append("%</div>\n");
-            html.append("</div>\n");
-            
-            html.append("</div>\n");
-            
-            html.append("<div class='info-section'>\n");
-            html.append("<p><strong>📅 Execution Start Time:</strong> ").append(executionStartTime).append("</p>\n");
-            html.append("<p><strong>🌐 Website:</strong> https://www.damsdelhi.com/</p>\n");
-            html.append("<p><strong>📱 Phone Number:</strong> +919456628016</p>\n");
-            html.append("<p><strong>🔐 OTP Used:</strong> 2000</p>\n");
-            html.append("<p><strong>🎓 Course Type:</strong> NEET PG - CBT (Center Based Test)</p>\n");
-            html.append("<p><strong>📍 Selected City:</strong> Delhi</p>\n");
-            html.append("<p><strong>💳 Payment Method:</strong> Paytm</p>\n");
-            html.append("</div>\n");
-            html.append("</div>\n");
+            html.append("<div class='stat-card'><div class='label'>Total</div><div class='value'>")
+                .append(courseResults.size()).append("</div></div>\n");
+            html.append("<div class='stat-card success'><div class='label'>Successful</div><div class='value'>")
+                .append(totalSuccessful).append("</div></div>\n");
+            html.append("<div class='stat-card failed'><div class='label'>Failed</div><div class='value'>")
+                .append(totalFailed).append("</div></div>\n");
+            html.append("</div>\n</div>\n");
             
             html.append("<div class='results'>\n");
-            html.append("<h2>📋 Detailed Course Results</h2>\n");
-            html.append("<div class='table-wrapper'>\n");
-            html.append("<table>\n");
-            html.append("<thead>\n");
-            html.append("<tr>\n");
-            html.append("<th>#</th>\n");
-            html.append("<th>Course Name</th>\n");
-            html.append("<th>Status</th>\n");
-            html.append("<th>Time</th>\n");
-            html.append("<th>Screenshot</th>\n");
-            html.append("<th>Error Details</th>\n");
-            html.append("</tr>\n");
-            html.append("</thead>\n");
-            html.append("<tbody>\n");
+            html.append("<h2 style='color: #2d3748; margin-bottom: 25px;'>📋 Course Results</h2>\n");
+            html.append("<table>\n<thead>\n<tr>\n");
+            html.append("<th>#</th><th>Course Name</th><th>Status</th><th>Time</th><th>Screenshot</th>\n");
+            html.append("</tr>\n</thead>\n<tbody>\n");
             
             for (int i = 0; i < courseResults.size(); i++) {
                 CourseResult result = courseResults.get(i);
                 html.append("<tr>\n");
-                html.append("<td class='index-cell'>").append(i + 1).append("</td>\n");
-                html.append("<td class='course-name'>").append(escapeHtml(result.courseName)).append("</td>\n");
+                html.append("<td>").append(i + 1).append("</td>\n");
+                html.append("<td>").append(escapeHtml(result.courseName)).append("</td>\n");
                 
                 String statusClass = result.status.equals("SUCCESS") ? "status-success" : "status-failed";
-                String statusIcon = result.status.equals("SUCCESS") ? "✅" : "❌";
-                html.append("<td><span class='status-badge ").append(statusClass).append("'>")
-                    .append(statusIcon).append(" ").append(result.status).append("</span></td>\n");
+                html.append("<td><span class='").append(statusClass).append("'>")
+                    .append(result.status).append("</span></td>\n");
                 
-                html.append("<td class='timestamp-cell'>").append(result.timestamp).append("</td>\n");
+                html.append("<td>").append(result.timestamp).append("</td>\n");
                 
-                if (result.screenshotPath != null && !result.screenshotPath.isEmpty()) {
+                if (result.screenshotPath != null) {
                     html.append("<td><a href='").append(result.screenshotPath)
-                        .append("' class='screenshot-link' target='_blank'>🖼️ View QR Code</a></td>\n");
+                        .append("' class='screenshot-link'>View QR</a></td>\n");
                 } else {
-                    html.append("<td class='no-data'>No screenshot</td>\n");
+                    html.append("<td>-</td>\n");
                 }
-                
-                if (result.errorMessage != null && !result.errorMessage.isEmpty()) {
-                    html.append("<td><span class='error-msg'>⚠️ ").append(escapeHtml(result.errorMessage)).append("</span></td>\n
+                html.append("</tr>\n");
+            }
+            
+            html.append("</tbody>\n</table>\n</div>\n");
+            
+            html.append("<div class='footer'>\n");
+            html.append("<p>🤖 DAMS Automation System</p>\n");
+            html.append("</div>\n</div>\n</body>\n</html>");
+            
+            FileWriter writer = new FileWriter(filename);
+            writer.write(html.toString());
+            writer.close();
+            
+            System.out.println("✓ Report saved: " + filename);
+            
+        } catch (Exception e) {
+            System.out.println("✗ Report failed: " + e.getMessage());
+        }
+    }
+
+    private static String escapeHtml(String text) {
+        if (text == null) return "";
+        return text.replace("&", "&amp;")
+                   .replace("<", "&lt;")
+                   .replace(">", "&gt;")
+                   .replace("\"", "&quot;")
+                   .replace("'", "&#39;");
+    }
+}
