@@ -13,7 +13,7 @@ on:
     branches:
       - main
     paths:
-      - '**.java'
+      - 'DamsAutomationFull.java'
       - '.github/workflows/**'
 
 permissions:
@@ -53,14 +53,14 @@ jobs:
           echo "=== Java Version ==="
           java -version
           
-      - name: 📦 Download Selenium JARs - COMPLETE SET
+      - name: 📦 Download Selenium, OkHttp, and JSON JARs
         run: |
           mkdir -p lib
           cd lib
           
-          echo "Downloading ALL required Selenium dependencies..."
+          echo "Downloading ALL required dependencies..."
           
-          # Core Selenium JARs
+          # Core Selenium JARs (Aapke original list se)
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-java/4.15.0/selenium-java-4.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-api/4.15.0/selenium-api-4.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chrome-driver/4.15.0/selenium-chrome-driver-4.15.0.jar
@@ -72,52 +72,42 @@ jobs:
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-json/4.15.0/selenium-json-4.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-devtools-v119/4.15.0/selenium-devtools-v119-4.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-os/4.15.0/selenium-os-4.15.0.jar
-          
-          # Google dependencies
           wget -q https://repo1.maven.org/maven2/com/google/guava/guava/32.1.3-jre/guava-32.1.3-jre.jar
           wget -q https://repo1.maven.org/maven2/com/google/guava/failureaccess/1.0.2/failureaccess-1.0.2.jar
           wget -q https://repo1.maven.org/maven2/com/google/auto/service/auto-service-annotations/1.1.1/auto-service-annotations-1.1.1.jar
-          
-          # HTTP and Networking
           wget -q https://repo1.maven.org/maven2/org/asynchttpclient/async-http-client/2.12.3/async-http-client-2.12.3.jar
           wget -q https://repo1.maven.org/maven2/io/netty/netty-all/4.1.100.Final/netty-all-4.1.100.Final.jar
           wget -q https://repo1.maven.org/maven2/org/apache/httpcomponents/client5/httpclient5/5.2.1/httpclient5-5.2.1.jar
           wget -q https://repo1.maven.org/maven2/org/apache/httpcomponents/core5/httpcore5/5.2.1/httpcore5-5.2.1.jar
           wget -q https://repo1.maven.org/maven2/org/apache/httpcomponents/core5/httpcore5-h2/5.2.1/httpcore5-h2-5.2.1.jar
-          
-          # Commons and Utilities
           wget -q https://repo1.maven.org/maven2/commons-io/commons-io/2.15.0/commons-io-2.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/apache/commons/commons-exec/1.3/commons-exec-1.3.jar
           wget -q https://repo1.maven.org/maven2/commons-codec/commons-codec/1.16.0/commons-codec-1.16.0.jar
           wget -q https://repo1.maven.org/maven2/commons-logging/commons-logging/1.2/commons-logging-1.2.jar
-          
-          # Failsafe and Testing
           wget -q https://repo1.maven.org/maven2/dev/failsafe/failsafe/3.3.2/failsafe-3.3.2.jar
           wget -q https://repo1.maven.org/maven2/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar
-          
-          # Byte Buddy
           wget -q https://repo1.maven.org/maven2/net/bytebuddy/byte-buddy/1.14.9/byte-buddy-1.14.9.jar
-          
-          # SLF4J Logging
           wget -q https://repo1.maven.org/maven2/org/slf4j/slf4j-api/2.0.9/slf4j-api-2.0.9.jar
           wget -q https://repo1.maven.org/maven2/org/slf4j/slf4j-simple/2.0.9/slf4j-simple-2.0.9.jar
+
+          # === NAYE JARS (OkHttp aur JSON) ===
+          echo "Downloading OkHttp and JSON JARs..."
+          wget -q https://repo1.maven.org/maven2/com/squareup/okhttp3/okhttp/4.10.0/okhttp-4.10.0.jar
+          wget -q https://repo1.maven.org/maven2/com/squareup/okio/okio-jvm/3.0.0/okio-jvm-3.0.0.jar
+          wget -q https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/1.6.20/kotlin-stdlib-1.6.20.jar
+          wget -q https://repo1.maven.org/maven2/org/json/json/20231013/json-20231013.jar
           
           echo ""
           echo "✓ All JARs downloaded successfully!"
-          echo ""
-          echo "Total files:"
-          ls -1 | wc -l
-          echo ""
-          echo "Total size:"
-          du -sh .
+          echo "Total files: $(ls -1 | wc -l)"
+          echo "Total size: $(du -sh .)"
           
       - name: 📁 Create Required Directories
         run: |
-          mkdir -p screenshots
+          mkdir -p reports
           mkdir -p compiled
-          echo "✓ Directories created"
+          echo "✓ Directories created (compiled, reports)"
           
-      # ⭐⭐⭐ NAYA STEP - ChromeDriver Path Set Karo ⭐⭐⭐
       - name: 🔧 Set ChromeDriver Path
         run: |
           export PATH=$PATH:/usr/bin
@@ -128,12 +118,12 @@ jobs:
           
       - name: 🏗️ Compile Java Code
         run: |
-          echo "Compiling DamsDelhiLogin.java..."
-          javac -cp "lib/*" -d compiled DamsDelhiLogin.java
+          echo "Compiling DamsAutomationFull.java..."
+          # Sahi file ka naam use karein
+          javac -cp "lib/*" -d compiled DamsAutomationFull.java
           
           if [ $? -eq 0 ]; then
             echo "✓ Compilation successful"
-            echo ""
             echo "Compiled classes:"
             ls -la compiled/
           else
@@ -141,34 +131,37 @@ jobs:
             exit 1
           fi
           
-      # ⭐⭐⭐ TIMEOUT ADD KIYA ⭐⭐⭐
       - name: 🚀 Run DAMS CBT Automation
         env:
+          # YEH SABSE ZAROORI HAI: Apna token GitHub Secret se pass karein
+          DAMS_JWT_TOKEN: ${{ secrets.DAMS_JWT_TOKEN }}
           CI: true
         timeout-minutes: 30
         run: |
           echo "Starting automation execution..."
           echo "======================================"
-          java -cp "compiled:lib/*" DamsDelhiLogin
+          # Sahi class ka naam use karein
+          java -cp "compiled:lib/*" DamsAutomationFull
           echo ""
           echo "======================================"
           echo "Execution completed"
         continue-on-error: true
-        
+          
       - name: 📊 Check Results
         if: always()
         run: |
           echo "=== Execution Summary ===" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          if [ -d "screenshots" ]; then
-            screenshot_count=$(ls -1 screenshots/*.png 2>/dev/null | wc -l)
+          # 'reports' folder mein screenshots check karein
+          if [ -d "reports" ]; then
+            screenshot_count=$(ls -1 reports/*.png 2>/dev/null | wc -l)
             echo "- *Screenshots Generated*: $screenshot_count" >> $GITHUB_STEP_SUMMARY
             
             if [ $screenshot_count -gt 0 ]; then
               echo "" >> $GITHUB_STEP_SUMMARY
               echo "### Screenshots List:" >> $GITHUB_STEP_SUMMARY
-              for file in screenshots/*.png; do
+              for file in reports/*.png; do
                 if [ -f "$file" ]; then
                   filename=$(basename "$file")
                   filesize=$(du -h "$file" | cut -f1)
@@ -178,33 +171,34 @@ jobs:
             fi
           fi
           
-          if ls DAMS_CBT_Report_*.html 1> /dev/null 2>&1; then
-            report_file=$(ls DAMS_CBT_Report_*.html | head -1)
+          # 'reports' folder mein HTML report check karein (sahi naam se)
+          if ls reports/DAMS_CBT_Report_*.html 1> /dev/null 2>&1; then
+            report_file=$(ls reports/DAMS_CBT_Report_*.html | head -1)
+            report_basename=$(basename "$report_file")
             report_size=$(du -h "$report_file" | cut -f1)
-            echo "- *HTML Report*: Generated ✅ ($report_size)" >> $GITHUB_STEP_SUMMARY
+            echo "- *HTML Report*: $report_basename ✅ ($report_size)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- *HTML Report*: Not found ❌" >> $GITHUB_STEP_SUMMARY
           fi
           
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- *Run ID*: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
           echo "- *Triggered by*: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           
-      # ✅ ONLY GitHub Pages artifact will be created
-      # Screenshots and HTML reports will be included directly in Pages deployment
-      
       - name: 📦 Prepare Files for GitHub Pages
         if: always()
         run: |
           mkdir -p ./github-pages-content/screenshots
           
-          # Copy HTML report
-          if ls DAMS_CBT_Report_*.html 1> /dev/null 2>&1; then
-            cp DAMS_CBT_Report_*.html ./github-pages-content/
+          # 'reports' folder se HTML copy karein
+          if ls reports/DAMS_CBT_Report_*.html 1> /dev/null 2>&1; then
+            cp reports/DAMS_CBT_Report_*.html ./github-pages-content/
             echo "✓ HTML report copied"
           fi
           
-          # Copy screenshots
-          if [ -d "screenshots" ] && [ "$(ls -A screenshots)" ]; then
-            cp screenshots/*.png ./github-pages-content/screenshots/ 2>/dev/null || true
+          # 'reports' folder se screenshots copy karein
+          if [ -d "reports" ] && [ "$(ls -A reports/*.png 2>/dev/null)" ]; then
+            cp reports/*.png ./github-pages-content/screenshots/ 2>/dev/null || true
             echo "✓ Screenshots copied"
           fi
           
@@ -212,7 +206,6 @@ jobs:
           ls -la ./github-pages-content/
           ls -la ./github-pages-content/screenshots/ || true
       
-      # ✅ Upload as workflow artifact (for deploy-reports job)
       - name: 📤 Upload GitHub Pages Content
         if: always()
         uses: actions/upload-artifact@v4
@@ -229,13 +222,13 @@ jobs:
           pwd
           ls -la
           echo ""
-          echo "Screenshots:"
-          ls -la screenshots/ || echo "No screenshots"
+          echo "Reports:"
+          ls -la reports/ || echo "No reports folder"
           echo ""
           echo "Compiled:"
-          ls -la compiled/ || echo "No compiled"
+          ls -la compiled/ || echo "No compiled folder"
           echo ""
-          echo "Libraries:"
+          echo "Libraries (top 20):"
           ls -la lib/ | head -20
 
   deploy-reports:
@@ -246,7 +239,7 @@ jobs:
     concurrency:
       group: pages
       cancel-in-progress: false
-    
+      
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -263,6 +256,7 @@ jobs:
         run: |
           mkdir -p ./reports
           
+          # index.html file banayein
           cat > ./reports/index.html << 'EOF'
           <!DOCTYPE html>
           <html lang="en">
@@ -277,6 +271,7 @@ jobs:
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
                 min-height: 100vh; 
                 padding: 40px 20px; 
+                color: #333;
               }
               .container { max-width: 1200px; margin: 0 auto; }
               .header { 
@@ -296,29 +291,37 @@ jobs:
                 -webkit-background-clip: text;
                 -webkit-text-fill-color: transparent;
               }
+              .report-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 30px;
+              }
               .report-list { 
                 background: white; 
                 padding: 40px; 
                 border-radius: 20px; 
                 box-shadow: 0 10px 40px rgba(0,0,0,0.1);
               }
-              .report-list h2 { color: #2d3748; margin-bottom: 20px; }
+              .report-list h2 { color: #2d3748; margin-bottom: 20px; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
               .report-item { 
                 padding: 15px; 
                 margin: 10px 0; 
                 background: #f7fafc; 
                 border-radius: 10px; 
                 transition: all 0.3s;
+                border-left: 5px solid #667eea;
               }
               .report-item:hover { 
                 background: #e2e8f0; 
                 transform: translateX(5px);
+                border-left-color: #764ba2;
               }
               a { 
                 color: #667eea; 
                 text-decoration: none; 
                 font-weight: 600; 
                 display: block;
+                font-size: 1.1em;
               }
               a:hover { color: #764ba2; }
               .timestamp { 
@@ -330,6 +333,7 @@ jobs:
                 text-align: center;
                 color: #718096;
                 padding: 40px;
+                font-size: 1.2em;
               }
             </style>
           </head>
@@ -339,43 +343,66 @@ jobs:
                 <h1>🎯 DAMS CBT Automation Reports</h1>
                 <p style="color: #718096; margin-top: 10px;">Comprehensive CBT Course Purchase Summary</p>
               </div>
-              <div class="report-list">
-                <h2>📊 Available Reports:</h2>
+              <div class="report-grid">
+                
+                <!-- HTML Reports Section -->
+                <div class="report-list">
+                  <h2>📊 HTML Reports:</h2>
           EOF
-          
+
           report_found=false
-          
           if ls ./reports/DAMS_CBT_Report_*.html 1> /dev/null 2>&1; then
             for file in ./reports/DAMS_CBT_Report_*.html; do
               if [ -f "$file" ]; then
                 basename=$(basename "$file")
                 filesize=$(du -h "$file" | cut -f1)
-                
                 echo "<div class='report-item'>" >> ./reports/index.html
-                echo "  <a href='$basename'>📄 $basename</a>" >> ./reports/index.html
+                echo "  <a href='$basename' target='_blank'>📄 $basename</a>" >> ./reports/index.html
                 echo "  <div class='timestamp'>Size: $filesize</div>" >> ./reports/index.html
                 echo "</div>" >> ./reports/index.html
-                
                 report_found=true
               fi
             done
           fi
           
           if [ "$report_found" = false ]; then
-            echo "<div class='no-reports'>" >> ./reports/index.html
-            echo "  <p>🔍 No reports available yet.</p>" >> ./reports/index.html
-            echo "  <p style='margin-top: 10px;'>Run the automation workflow to generate reports.</p>" >> ./reports/index.html
-            echo "</div>" >> ./reports/index.html
+            echo "<div class='no-reports'><p>🔍 No HTML reports available yet.</p></div>" >> ./reports/index.html
           fi
-          
+
+          echo "</div>" >> ./reports/index.html # report-list close
+
+          # === Screenshot Section ===
+          echo "<div class='report-list'>" >> ./reports/index.html
+          echo "<h2>📸 Screenshots:</h2>" >> ./reports/index.html
+
+          screenshot_found=false
+          if ls ./reports/screenshots/*.png 1> /dev/null 2>&1; then
+            for file in ./reports/screenshots/*.png; do
+              if [ -f "$file" ]; then
+                basename=$(basename "$file")
+                filesize=$(du -h "$file" | cut -f1)
+                echo "<div class='report-item'>" >> ./reports/index.html
+                echo "  <a href='screenshots/$basename' target='_blank'>📸 $basename</a>" >> ./reports/index.html
+                echo "  <div class='timestamp'>Size: $filesize</div>" >> ./reports/index.html
+                echo "</div>" >> ./reports/index.html
+                screenshot_found=true
+              fi
+            done
+          fi
+
+          if [ "$screenshot_found" = false ]; then
+            echo "<div class='no-reports'><p>🔍 No screenshots available yet.</p></div>" >> ./reports/index.html
+          fi
+
           cat >> ./reports/index.html << 'EOF'
-              </div>
-            </div>
-          </body>
-          </html>
+                  </div> <!-- report-list close -->
+                </div> <!-- report-grid close -->
+              </div> <!-- container close -->
+            </body>
+            </html>
           EOF
           
-          echo "✓ Index page created"
+          echo "✓ Index page created/updated"
           
       - name: 🚀 Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
