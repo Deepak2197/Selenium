@@ -18,7 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import org.json.*;
 
-public class DamsDelhiLogin {
+public class DamsEnhancedAPIFetcher {
     private static WebDriver driver;
     private static WebDriverWait wait;
     private static JavascriptExecutor js;
@@ -32,8 +32,10 @@ public class DamsDelhiLogin {
     private static SimpleDateFormat fileFormat = new SimpleDateFormat("yyyyMMdd_HHmmss");
     private static String executionStartTime;
     
-    // API data storage
-    private static JSONArray apiCourseData = new JSONArray();
+    // Enhanced API data storage
+    private static JSONObject fullAPIResponse = null;
+    private static JSONArray allCoursesData = new JSONArray();
+    private static Map<String, JSONObject> courseDetailsMap = new HashMap<>();
     
     static class CourseResult {
         String courseName;
@@ -57,61 +59,43 @@ public class DamsDelhiLogin {
             executionStartTime = fileFormat.format(new Date());
 
             System.out.println("╔════════════════════════════════════════════╗");
-            System.out.println("║  DAMS - CBT COURSES API FETCHER           ║");
+            System.out.println("║  DAMS - ENHANCED API DATA FETCHER         ║");
             System.out.println("╚════════════════════════════════════════════╝\n");
 
-            // First, fetch data from API
-            fetchAPIData();
+            // Fetch comprehensive data from API
+            fetchComprehensiveAPIData();
             
-            // Generate HTML page with API data
-            generateAPIDataHTML();
-
-            setupDriver();
-            login();
-            navigateToCBTSectionViaHamburger();
-
-            // Discover all CBT courses
-            List<String> cbtCourses = discoverCBTCourses();
-            System.out.println("\n✓ Found " + cbtCourses.size() + " CBT courses");
-            for (int i = 0; i < cbtCourses.size(); i++) {
-                System.out.println("  [" + (i + 1) + "] " + cbtCourses.get(i));
-            }
-
-            // Process each CBT course
-            for (int i = 0; i < cbtCourses.size(); i++) {
-                String courseName = cbtCourses.get(i);
-                System.out.println("\n" + "=".repeat(60));
-                System.out.println("PROCESSING: " + courseName + " [" + (i+1) + "/" + cbtCourses.size() + "]");
-                System.out.println("=".repeat(60));
-
-                processCBTCourse(courseName, i);
-                
-                if (i < cbtCourses.size() - 1) {
-                    returnToCBTSection();
-                }
-            }
+            // Generate enhanced HTML report with all API data
+            generateEnhancedHTMLReport();
 
             System.out.println("\n╔════════════════════════════════════════════╗");
-            System.out.println("║  EXECUTION COMPLETED!                      ║");
-            System.out.println("║  Successful: " + totalSuccessful + "                              ║");
-            System.out.println("║  Failed: " + totalFailed + "                                  ║");
+            System.out.println("║  API DATA EXTRACTION COMPLETED!            ║");
+            System.out.println("║  Total Courses Found: " + allCoursesData.length() + "                   ║");
             System.out.println("╚════════════════════════════════════════════╝");
 
         } catch (Exception e) {
             System.out.println("CRITICAL ERROR: " + e.getMessage());
             e.printStackTrace();
-        } finally {
-            generateDetailedReport();
-            System.out.println("\nClosing in 10 seconds...");
-            sleep(10);
-            if (driver != null) {
-                driver.quit();
-            }
         }
     }
 
-    private static void fetchAPIData() {
-        System.out.println("Fetching data from API...");
+    private static void fetchComprehensiveAPIData() {
+        System.out.println("Fetching comprehensive data from DAMS API...\n");
+        
+        // Fetch data for multiple categories
+        String[] categoryIds = {"1", "2", "3", "4", "5"}; // Try multiple categories
+        
+        for (String categoryId : categoryIds) {
+            System.out.println("→ Fetching Category ID: " + categoryId);
+            fetchAPIDataForCategory(categoryId);
+            System.out.println();
+        }
+        
+        System.out.println("✓ API data collection complete!");
+        System.out.println("  → Total unique courses collected: " + allCoursesData.length());
+    }
+
+    private static void fetchAPIDataForCategory(String categoryId) {
         try {
             URL url = new URL("https://api.damsdelhi.com/v2_data_model/get_all_plan_by_category_id");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -129,20 +113,20 @@ public class DamsDelhiLogin {
             conn.setRequestProperty("Referer", "https://www.damsdelhi.com/");
             conn.setDoOutput(true);
             
-            // Send POST request body (empty JSON object or with category_id if needed)
-            String jsonInputString = "{\"category_id\": \"1\"}";
+            // Send POST request
+            String jsonInputString = "{\"category_id\": \"" + categoryId + "\"}";
             try (OutputStream os = conn.getOutputStream()) {
                 byte[] input = jsonInputString.getBytes("utf-8");
                 os.write(input, 0, input.length);
             }
             
             int responseCode = conn.getResponseCode();
-            System.out.println("  → API Response Code: " + responseCode);
+            System.out.println("  → Response Code: " + responseCode);
             
             if (responseCode == 200) {
                 BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-                String inputLine;
                 StringBuilder response = new StringBuilder();
+                String inputLine;
                 
                 while ((inputLine = in.readLine()) != null) {
                     response.append(inputLine);
@@ -152,287 +136,117 @@ public class DamsDelhiLogin {
                 // Parse JSON response
                 JSONObject jsonResponse = new JSONObject(response.toString());
                 
-                // Check if response has data array
-                if (jsonResponse.has("data")) {
-                    Object dataObj = jsonResponse.get("data");
-                    if (dataObj instanceof JSONArray) {
-                        apiCourseData = (JSONArray) dataObj;
-                    } else if (dataObj instanceof JSONObject) {
-                        // If data is an object, check for nested arrays
-                        JSONObject dataObject = (JSONObject) dataObj;
-                        if (dataObject.has("plans")) {
-                            apiCourseData = dataObject.getJSONArray("plans");
-                        } else if (dataObject.has("courses")) {
-                            apiCourseData = dataObject.getJSONArray("courses");
-                        } else {
-                            // Convert object to array with single element
-                            apiCourseData = new JSONArray();
-                            apiCourseData.put(dataObject);
-                        }
-                    }
-                    System.out.println("  ✓ Successfully fetched " + apiCourseData.length() + " courses from API");
-                } else if (jsonResponse.has("plans")) {
-                    apiCourseData = jsonResponse.getJSONArray("plans");
-                    System.out.println("  ✓ Successfully fetched " + apiCourseData.length() + " plans from API");
-                } else if (jsonResponse.has("courses")) {
-                    apiCourseData = jsonResponse.getJSONArray("courses");
-                    System.out.println("  ✓ Successfully fetched " + apiCourseData.length() + " courses from API");
-                } else {
-                    // Store the entire response as single item
-                    apiCourseData.put(jsonResponse);
-                    System.out.println("  ✓ API data fetched (custom structure)");
+                if (fullAPIResponse == null) {
+                    fullAPIResponse = jsonResponse;
                 }
                 
-                // Debug: Print raw JSON structure
-                System.out.println("  → JSON Structure: " + jsonResponse.toString().substring(0, Math.min(200, jsonResponse.toString().length())) + "...");
+                // Extract courses from various possible structures
+                extractCoursesFromResponse(jsonResponse, categoryId);
                 
             } else {
                 System.out.println("  ✗ API request failed with code: " + responseCode);
-                BufferedReader errorReader = new BufferedReader(new InputStreamReader(conn.getErrorStream()));
-                String errorLine;
-                StringBuilder errorResponse = new StringBuilder();
-                while ((errorLine = errorReader.readLine()) != null) {
-                    errorResponse.append(errorLine);
-                }
-                System.out.println("  ✗ Error response: " + errorResponse.toString());
             }
             
         } catch (Exception e) {
-            System.out.println("  ✗ Error fetching API data: " + e.getMessage());
-            e.printStackTrace();
+            System.out.println("  ✗ Error fetching category " + categoryId + ": " + e.getMessage());
         }
     }
 
-    private static void generateAPIDataHTML() {
-        System.out.println("\nGenerating HTML page with API data...");
+    private static void extractCoursesFromResponse(JSONObject response, String categoryId) {
+        try {
+            // Try multiple possible JSON structures
+            JSONArray courses = null;
+            
+            if (response.has("data")) {
+                Object dataObj = response.get("data");
+                if (dataObj instanceof JSONArray) {
+                    courses = (JSONArray) dataObj;
+                } else if (dataObj instanceof JSONObject) {
+                    JSONObject dataObject = (JSONObject) dataObj;
+                    if (dataObject.has("plans")) {
+                        courses = dataObject.getJSONArray("plans");
+                    } else if (dataObject.has("courses")) {
+                        courses = dataObject.getJSONArray("courses");
+                    } else if (dataObject.has("items")) {
+                        courses = dataObject.getJSONArray("items");
+                    }
+                }
+            } else if (response.has("plans")) {
+                courses = response.getJSONArray("plans");
+            } else if (response.has("courses")) {
+                courses = response.getJSONArray("courses");
+            } else if (response.has("result")) {
+                Object resultObj = response.get("result");
+                if (resultObj instanceof JSONArray) {
+                    courses = (JSONArray) resultObj;
+                }
+            }
+            
+            if (courses != null && courses.length() > 0) {
+                System.out.println("  ✓ Found " + courses.length() + " courses in category " + categoryId);
+                
+                for (int i = 0; i < courses.length(); i++) {
+                    JSONObject course = courses.getJSONObject(i);
+                    
+                    // Add category info
+                    course.put("source_category_id", categoryId);
+                    
+                    // Store in map with unique identifier
+                    String courseId = course.optString("id", 
+                                    course.optString("plan_id", 
+                                    course.optString("course_id", "unknown_" + i)));
+                    
+                    courseDetailsMap.put(courseId, course);
+                    allCoursesData.put(course);
+                }
+            } else {
+                System.out.println("  ℹ No courses found in category " + categoryId);
+            }
+            
+        } catch (Exception e) {
+            System.out.println("  ⚠ Error extracting courses: " + e.getMessage());
+        }
+    }
+
+    private static void generateEnhancedHTMLReport() {
+        System.out.println("\nGenerating enhanced HTML report with complete API data...");
         
         try {
             String timestamp = fileFormat.format(new Date());
-            String filename = "DAMS_API_Courses_" + timestamp + ".html";
+            String filename = "DAMS_Complete_API_Report_" + timestamp + ".html";
             
             StringBuilder html = new StringBuilder();
             html.append("<!DOCTYPE html>\n<html>\n<head>\n");
             html.append("<meta charset='UTF-8'>\n");
             html.append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>\n");
-            html.append("<title>DAMS API Courses Data - ").append(timestamp).append("</title>\n");
+            html.append("<title>DAMS Complete API Report - ").append(timestamp).append("</title>\n");
             html.append("<style>\n");
-            html.append("* { margin: 0; padding: 0; box-sizing: border-box; }\n");
-            html.append("body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 40px 20px; }\n");
-            html.append(".container { max-width: 1600px; margin: 0 auto; }\n");
-            html.append(".header { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); text-align: center; }\n");
-            html.append(".header h1 { color: #2d3748; font-size: 42px; font-weight: 700; margin-bottom: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }\n");
-            html.append(".header .subtitle { color: #718096; font-size: 16px; margin-top: 5px; }\n");
-            html.append(".search-box { background: white; border-radius: 20px; padding: 30px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); }\n");
-            html.append(".search-box input { width: 100%; padding: 15px 20px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 16px; transition: all 0.3s; }\n");
-            html.append(".search-box input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }\n");
-            html.append(".courses-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 25px; margin-bottom: 30px; }\n");
-            html.append(".course-card { background: white; border-radius: 15px; padding: 30px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); transition: all 0.3s; cursor: pointer; border: 2px solid transparent; }\n");
-            html.append(".course-card:hover { transform: translateY(-8px); box-shadow: 0 15px 40px rgba(0,0,0,0.2); border-color: #667eea; }\n");
-            html.append(".course-card .course-title { font-size: 20px; font-weight: 700; color: #2d3748; margin-bottom: 15px; line-height: 1.4; min-height: 60px; }\n");
-            html.append(".course-card .course-info { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; }\n");
-            html.append(".course-card .info-badge { display: inline-block; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 600; background: #edf2f7; color: #4a5568; text-transform: uppercase; letter-spacing: 0.5px; }\n");
-            html.append(".course-card .price { font-size: 28px; font-weight: 700; color: #667eea; margin: 20px 0; display: flex; align-items: center; gap: 15px; }\n");
-            html.append(".course-card .price .current { color: #48bb78; }\n");
-            html.append(".course-card .price .original { font-size: 18px; color: #a0aec0; text-decoration: line-through; font-weight: 500; }\n");
-            html.append(".course-card .price .discount { background: #f56565; color: white; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-weight: 600; }\n");
-            html.append(".course-card .description { color: #718096; font-size: 14px; line-height: 1.8; margin-bottom: 15px; max-height: 120px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }\n");
-            html.append(".course-card .details { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 20px 0; padding: 15px; background: #f7fafc; border-radius: 10px; }\n");
-            html.append(".course-card .detail-item { font-size: 13px; color: #4a5568; }\n");
-            html.append(".course-card .detail-item strong { color: #2d3748; display: block; margin-bottom: 4px; }\n");
-            html.append(".course-card .buy-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; font-weight: 700; font-size: 16px; cursor: pointer; transition: all 0.3s; text-transform: uppercase; letter-spacing: 1px; }\n");
-            html.append(".course-card .buy-btn:hover { transform: scale(1.03); box-shadow: 0 8px 20px rgba(102, 126, 234, 0.5); }\n");
-            html.append(".stats { background: white; border-radius: 20px; padding: 30px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); text-align: center; }\n");
-            html.append(".stats h2 { color: #2d3748; margin-bottom: 15px; font-size: 24px; }\n");
-            html.append(".stats .count { font-size: 56px; font-weight: 700; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }\n");
-            html.append(".no-courses { text-align: center; padding: 60px 20px; background: white; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); }\n");
-            html.append(".no-courses h2 { color: #2d3748; font-size: 28px; margin-bottom: 15px; }\n");
-            html.append(".no-courses p { color: #718096; font-size: 16px; }\n");
-            html.append(".footer { text-align: center; color: white; margin-top: 40px; padding: 20px; }\n");
-            html.append(".footer p { opacity: 0.95; margin: 8px 0; font-size: 14px; }\n");
-            html.append("@media (max-width: 768px) { .courses-grid { grid-template-columns: 1fr; } .header h1 { font-size: 28px; } .course-card .details { grid-template-columns: 1fr; } }\n");
+            addEnhancedStyles(html);
             html.append("</style>\n");
             html.append("<script>\n");
-            html.append("function searchCourses() {\n");
-            html.append("  let input = document.getElementById('searchInput').value.toLowerCase();\n");
-            html.append("  let cards = document.getElementsByClassName('course-card');\n");
-            html.append("  let count = 0;\n");
-            html.append("  for (let i = 0; i < cards.length; i++) {\n");
-            html.append("    let text = cards[i].textContent.toLowerCase();\n");
-            html.append("    if (text.includes(input)) {\n");
-            html.append("      cards[i].style.display = 'block';\n");
-            html.append("      count++;\n");
-            html.append("    } else {\n");
-            html.append("      cards[i].style.display = 'none';\n");
-            html.append("    }\n");
-            html.append("  }\n");
-            html.append("  document.getElementById('resultCount').textContent = count;\n");
-            html.append("}\n");
+            addEnhancedJavaScript(html);
             html.append("</script>\n");
             html.append("</head>\n<body>\n");
             
             html.append("<div class='container'>\n");
-            html.append("<div class='header'>\n");
-            html.append("<h1>🎓 DAMS API Courses Database</h1>\n");
-            html.append("<p class='subtitle'>Complete Course Catalog from DAMS Delhi API</p>\n");
-            html.append("</div>\n");
             
-            if (apiCourseData.length() > 0) {
-                html.append("<div class='search-box'>\n");
-                html.append("<input type='text' id='searchInput' placeholder='🔍 Search by course name, category, price, duration...' onkeyup='searchCourses()'>\n");
-                html.append("</div>\n");
-                
-                html.append("<div class='stats'>\n");
-                html.append("<h2>📚 Total Courses Available</h2>\n");
-                html.append("<div class='count' id='resultCount'>").append(apiCourseData.length()).append("</div>\n");
-                html.append("</div>\n");
-                
-                html.append("<div class='courses-grid'>\n");
-                
-                // Generate course cards from API data
-                for (int i = 0; i < apiCourseData.length(); i++) {
-                    try {
-                        JSONObject course = apiCourseData.getJSONObject(i);
-                        
-                        html.append("<div class='course-card'>\n");
-                        
-                        // Course Title
-                        String title = course.optString("title", 
-                                      course.optString("name", 
-                                      course.optString("plan_name", 
-                                      course.optString("course_name", "Course " + (i+1)))));
-                        html.append("<div class='course-title'>").append(escapeHtml(title)).append("</div>\n");
-                        
-                        // Course Info badges
-                        html.append("<div class='course-info'>\n");
-                        
-                        if (course.has("category") && !course.isNull("category")) {
-                            html.append("<span class='info-badge'>📚 ").append(escapeHtml(course.getString("category"))).append("</span>\n");
-                        }
-                        if (course.has("category_name") && !course.isNull("category_name")) {
-                            html.append("<span class='info-badge'>📚 ").append(escapeHtml(course.getString("category_name"))).append("</span>\n");
-                        }
-                        
-                        if (course.has("type") && !course.isNull("type")) {
-                            html.append("<span class='info-badge'>🎯 ").append(escapeHtml(course.getString("type"))).append("</span>\n");
-                        }
-                        if (course.has("plan_type") && !course.isNull("plan_type")) {
-                            html.append("<span class='info-badge'>🎯 ").append(escapeHtml(course.getString("plan_type"))).append("</span>\n");
-                        }
-                        
-                        if (course.has("level") && !course.isNull("level")) {
-                            html.append("<span class='info-badge'>📊 ").append(escapeHtml(course.getString("level"))).append("</span>\n");
-                        }
-                        
-                        html.append("</div>\n");
-                        
-                        // Price Section
-                        html.append("<div class='price'>\n");
-                        String currentPrice = course.optString("price", 
-                                            course.optString("amount", 
-                                            course.optString("final_price", 
-                                            course.optString("selling_price", "N/A"))));
-                        
-                        if (!currentPrice.equals("N/A") && !currentPrice.isEmpty()) {
-                            html.append("<span class='current'>₹").append(escapeHtml(currentPrice)).append("</span>");
-                            
-                            String originalPrice = course.optString("original_price", 
-                                                 course.optString("mrp", 
-                                                 course.optString("actual_price", "")));
-                            
-                            if (!originalPrice.isEmpty() && !originalPrice.equals(currentPrice)) {
-                                html.append("<span class='original'>₹").append(escapeHtml(originalPrice)).append("</span>");
-                                
-                                // Calculate discount
-                                try {
-                                    double current = Double.parseDouble(currentPrice);
-                                    double original = Double.parseDouble(originalPrice);
-                                    if (original > current) {
-                                        int discount = (int) (((original - current) / original) * 100);
-                                        html.append("<span class='discount'>").append(discount).append("% OFF</span>");
-                                    }
-                                } catch (Exception e) {}
-                            }
-                        }
-                        html.append("</div>\n");
-                        
-                        // Description
-                        if (course.has("description") && !course.isNull("description")) {
-                            String desc = course.getString("description");
-                            if (!desc.isEmpty()) {
-                                html.append("<div class='description'>").append(escapeHtml(desc)).append("</div>\n");
-                            }
-                        }
-                        
-                        // Details Section
-                        html.append("<div class='details'>\n");
-                        
-                        if (course.has("validity") && !course.isNull("validity")) {
-                            html.append("<div class='detail-item'><strong>⏳ Validity</strong>")
-                                .append(escapeHtml(course.getString("validity"))).append("</div>\n");
-                        }
-                        if (course.has("valid_days") && !course.isNull("valid_days")) {
-                            html.append("<div class='detail-item'><strong>⏳ Valid Days</strong>")
-                                .append(escapeHtml(course.getString("valid_days"))).append(" days</div>\n");
-                        }
-                        
-                        if (course.has("duration") && !course.isNull("duration")) {
-                            html.append("<div class='detail-item'><strong>⏱️ Duration</strong>")
-                                .append(escapeHtml(course.getString("duration"))).append("</div>\n");
-                        }
-                        
-                        if (course.has("tests_count") && !course.isNull("tests_count")) {
-                            html.append("<div class='detail-item'><strong>📝 Tests</strong>")
-                                .append(escapeHtml(course.getString("tests_count"))).append("</div>\n");
-                        }
-                        if (course.has("total_tests") && !course.isNull("total_tests")) {
-                            html.append("<div class='detail-item'><strong>📝 Total Tests</strong>")
-                                .append(escapeHtml(course.getString("total_tests"))).append("</div>\n");
-                        }
-                        
-                        if (course.has("subjects") && !course.isNull("subjects")) {
-                            html.append("<div class='detail-item'><strong>📖 Subjects</strong>")
-                                .append(escapeHtml(course.getString("subjects"))).append("</div>\n");
-                        }
-                        
-                        if (course.has("language") && !course.isNull("language")) {
-                            html.append("<div class='detail-item'><strong>🌐 Language</strong>")
-                                .append(escapeHtml(course.getString("language"))).append("</div>\n");
-                        }
-                        
-                        if (course.has("mode") && !course.isNull("mode")) {
-                            html.append("<div class='detail-item'><strong>💻 Mode</strong>")
-                                .append(escapeHtml(course.getString("mode"))).append("</div>\n");
-                        }
-                        
-                        if (course.has("center") && !course.isNull("center")) {
-                            html.append("<div class='detail-item'><strong>📍 Center</strong>")
-                                .append(escapeHtml(course.getString("center"))).append("</div>\n");
-                        }
-                        
-                        html.append("</div>\n");
-                        
-                        html.append("<button class='buy-btn'>🛒 View Details</button>\n");
-                        html.append("</div>\n");
-                        
-                    } catch (Exception e) {
-                        System.out.println("  ⚠ Error processing course " + i + ": " + e.getMessage());
-                    }
-                }
-                
-                html.append("</div>\n");
-            } else {
-                html.append("<div class='no-courses'>\n");
-                html.append("<h2>📭 No Courses Found</h2>\n");
-                html.append("<p>Unable to fetch course data from the API. Please check the API endpoint and try again.</p>\n");
-                html.append("</div>\n");
-            }
+            // Header Section
+            addHeaderSection(html, timestamp);
             
-            html.append("<div class='footer'>\n");
-            html.append("<p>🤖 Powered by DAMS Delhi API</p>\n");
-            html.append("<p>📅 Generated: ").append(new SimpleDateFormat("dd MMM yyyy, HH:mm:ss").format(new Date())).append("</p>\n");
-            html.append("<p>📊 Total Courses: ").append(apiCourseData.length()).append("</p>\n");
-            html.append("<p>🌐 API Endpoint: https://api.damsdelhi.com/v2_data_model/get_all_plan_by_category_id</p>\n");
-            html.append("</div>\n");
+            // Statistics Dashboard
+            addStatisticsDashboard(html);
+            
+            // Search and Filter Section
+            addSearchFilterSection(html);
+            
+            // Courses Display
+            addCoursesSection(html);
+            
+            // Raw JSON Data Section (Expandable)
+            addRawDataSection(html);
+            
+            // Footer
+            addFooterSection(html, timestamp);
             
             html.append("</div>\n");
             html.append("</body>\n</html>");
@@ -441,14 +255,441 @@ public class DamsDelhiLogin {
             writer.write(html.toString());
             writer.close();
             
-            System.out.println("✓ API data HTML saved: " + filename);
-            System.out.println("  → Total courses displayed: " + apiCourseData.length());
-            System.out.println("  → Open the file in your browser to view all courses!");
+            System.out.println("✓ Enhanced HTML report saved: " + filename);
+            System.out.println("  → Total courses displayed: " + allCoursesData.length());
+            System.out.println("  → Open the file in your browser to view complete data!");
             
         } catch (Exception e) {
             System.out.println("✗ HTML generation failed: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    private static void addEnhancedStyles(StringBuilder html) {
+        html.append("* { margin: 0; padding: 0; box-sizing: border-box; }\n");
+        html.append("body { font-family: 'Segoe UI', system-ui, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }\n");
+        html.append(".container { max-width: 1800px; margin: 0 auto; }\n");
+        
+        // Header Styles
+        html.append(".header { background: white; border-radius: 20px; padding: 40px; margin-bottom: 25px; box-shadow: 0 10px 50px rgba(0,0,0,0.15); text-align: center; }\n");
+        html.append(".header h1 { color: #2d3748; font-size: 48px; font-weight: 800; margin-bottom: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }\n");
+        html.append(".header .subtitle { color: #718096; font-size: 18px; margin: 10px 0; }\n");
+        html.append(".header .timestamp { color: #a0aec0; font-size: 14px; font-weight: 600; }\n");
+        
+        // Stats Dashboard
+        html.append(".stats-dashboard { background: white; border-radius: 20px; padding: 30px; margin-bottom: 25px; box-shadow: 0 10px 50px rgba(0,0,0,0.15); }\n");
+        html.append(".stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }\n");
+        html.append(".stat-box { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px; border-radius: 15px; color: white; text-align: center; box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4); }\n");
+        html.append(".stat-box .label { font-size: 13px; opacity: 0.95; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }\n");
+        html.append(".stat-box .value { font-size: 42px; font-weight: 800; }\n");
+        html.append(".stat-box.active { background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); }\n");
+        html.append(".stat-box.inactive { background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%); }\n");
+        html.append(".stat-box.categories { background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%); }\n");
+        
+        // Search and Filter
+        html.append(".search-filter { background: white; border-radius: 20px; padding: 30px; margin-bottom: 25px; box-shadow: 0 10px 50px rgba(0,0,0,0.15); }\n");
+        html.append(".search-box { position: relative; margin-bottom: 20px; }\n");
+        html.append(".search-box input { width: 100%; padding: 18px 50px 18px 20px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 16px; transition: all 0.3s; }\n");
+        html.append(".search-box input:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1); }\n");
+        html.append(".search-icon { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); color: #a0aec0; font-size: 20px; }\n");
+        html.append(".filter-buttons { display: flex; gap: 10px; flex-wrap: wrap; }\n");
+        html.append(".filter-btn { padding: 10px 20px; border: 2px solid #e2e8f0; background: white; border-radius: 25px; cursor: pointer; transition: all 0.3s; font-size: 14px; font-weight: 600; color: #4a5568; }\n");
+        html.append(".filter-btn:hover { border-color: #667eea; color: #667eea; transform: translateY(-2px); }\n");
+        html.append(".filter-btn.active { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-color: transparent; }\n");
+        
+        // Courses Grid
+        html.append(".courses-section { margin-bottom: 25px; }\n");
+        html.append(".courses-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 25px; }\n");
+        html.append(".course-card { background: white; border-radius: 18px; padding: 30px; box-shadow: 0 5px 25px rgba(0,0,0,0.12); transition: all 0.4s; cursor: pointer; border: 3px solid transparent; position: relative; overflow: hidden; }\n");
+        html.append(".course-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 5px; background: linear-gradient(90deg, #667eea 0%, #764ba2 100%); }\n");
+        html.append(".course-card:hover { transform: translateY(-10px); box-shadow: 0 20px 50px rgba(0,0,0,0.2); border-color: #667eea; }\n");
+        
+        // Course Card Elements
+        html.append(".course-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 20px; }\n");
+        html.append(".course-id { background: #edf2f7; color: #4a5568; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; }\n");
+        html.append(".status-badge { padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 700; text-transform: uppercase; }\n");
+        html.append(".status-badge.active { background: #c6f6d5; color: #22543d; }\n");
+        html.append(".status-badge.inactive { background: #fed7d7; color: #742a2a; }\n");
+        html.append(".course-title { font-size: 22px; font-weight: 700; color: #2d3748; margin-bottom: 15px; line-height: 1.4; min-height: 65px; }\n");
+        html.append(".course-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 15px; }\n");
+        html.append(".badge { padding: 5px 12px; border-radius: 15px; font-size: 11px; font-weight: 600; background: #edf2f7; color: #4a5568; }\n");
+        html.append(".price-section { margin: 20px 0; display: flex; align-items: center; gap: 15px; }\n");
+        html.append(".current-price { font-size: 32px; font-weight: 800; color: #48bb78; }\n");
+        html.append(".original-price { font-size: 18px; color: #a0aec0; text-decoration: line-through; }\n");
+        html.append(".discount-badge { background: #f56565; color: white; padding: 5px 12px; border-radius: 15px; font-size: 12px; font-weight: 700; }\n");
+        html.append(".course-description { color: #718096; font-size: 14px; line-height: 1.7; margin-bottom: 20px; max-height: 100px; overflow: hidden; }\n");
+        html.append(".course-details { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; padding: 20px; background: #f7fafc; border-radius: 12px; margin: 20px 0; }\n");
+        html.append(".detail-item { font-size: 13px; }\n");
+        html.append(".detail-item .label { color: #718096; font-weight: 600; display: block; margin-bottom: 5px; }\n");
+        html.append(".detail-item .value { color: #2d3748; font-weight: 700; }\n");
+        html.append(".view-json-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; transition: all 0.3s; }\n");
+        html.append(".view-json-btn:hover { transform: scale(1.02); box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5); }\n");
+        
+        // Raw Data Section
+        html.append(".raw-data-section { background: white; border-radius: 20px; padding: 30px; margin-bottom: 25px; box-shadow: 0 10px 50px rgba(0,0,0,0.15); }\n");
+        html.append(".raw-data-section h2 { color: #2d3748; font-size: 28px; margin-bottom: 20px; }\n");
+        html.append(".json-container { background: #1a202c; color: #48bb78; padding: 25px; border-radius: 12px; font-family: 'Courier New', monospace; font-size: 13px; overflow-x: auto; max-height: 600px; overflow-y: auto; }\n");
+        html.append(".copy-btn { padding: 10px 20px; background: #4299e1; color: white; border: none; border-radius: 8px; cursor: pointer; margin-bottom: 15px; font-weight: 600; }\n");
+        html.append(".copy-btn:hover { background: #3182ce; }\n");
+        
+        // Footer
+        html.append(".footer { text-align: center; color: white; padding: 30px; margin-top: 30px; }\n");
+        html.append(".footer p { margin: 8px 0; font-size: 14px; opacity: 0.95; }\n");
+        
+        // Responsive
+        html.append("@media (max-width: 768px) { .courses-grid { grid-template-columns: 1fr; } .course-details { grid-template-columns: 1fr; } }\n");
+    }
+
+    private static void addEnhancedJavaScript(StringBuilder html) {
+        html.append("let allCourses = [];\n");
+        html.append("let filteredCourses = [];\n\n");
+        
+        html.append("function searchCourses() {\n");
+        html.append("  const input = document.getElementById('searchInput').value.toLowerCase();\n");
+        html.append("  const cards = document.querySelectorAll('.course-card');\n");
+        html.append("  let count = 0;\n");
+        html.append("  cards.forEach(card => {\n");
+        html.append("    const text = card.textContent.toLowerCase();\n");
+        html.append("    if (text.includes(input)) {\n");
+        html.append("      card.style.display = 'block';\n");
+        html.append("      count++;\n");
+        html.append("    } else {\n");
+        html.append("      card.style.display = 'none';\n");
+        html.append("    }\n");
+        html.append("  });\n");
+        html.append("  document.getElementById('visibleCount').textContent = count;\n");
+        html.append("}\n\n");
+        
+        html.append("function filterByStatus(status) {\n");
+        html.append("  const cards = document.querySelectorAll('.course-card');\n");
+        html.append("  const buttons = document.querySelectorAll('.filter-btn');\n");
+        html.append("  buttons.forEach(btn => btn.classList.remove('active'));\n");
+        html.append("  event.target.classList.add('active');\n");
+        html.append("  let count = 0;\n");
+        html.append("  cards.forEach(card => {\n");
+        html.append("    if (status === 'all' || card.dataset.status === status) {\n");
+        html.append("      card.style.display = 'block';\n");
+        html.append("      count++;\n");
+        html.append("    } else {\n");
+        html.append("      card.style.display = 'none';\n");
+        html.append("    }\n");
+        html.append("  });\n");
+        html.append("  document.getElementById('visibleCount').textContent = count;\n");
+        html.append("}\n\n");
+        
+        html.append("function copyJSON() {\n");
+        html.append("  const jsonText = document.getElementById('rawJSON').textContent;\n");
+        html.append("  navigator.clipboard.writeText(jsonText).then(() => {\n");
+        html.append("    alert('JSON data copied to clipboard!');\n");
+        html.append("  });\n");
+        html.append("}\n\n");
+        
+        html.append("function viewCourseJSON(index) {\n");
+        html.append("  const course = allCourses[index];\n");
+        html.append("  alert('Course JSON:\\n\\n' + JSON.stringify(course, null, 2));\n");
+        html.append("}\n");
+    }
+
+    private static void addHeaderSection(StringBuilder html, String timestamp) {
+        html.append("<div class='header'>\n");
+        html.append("<h1>🎓 DAMS Complete API Data Report</h1>\n");
+        html.append("<p class='subtitle'>Comprehensive Course Catalog with Full API Details</p>\n");
+        html.append("<p class='timestamp'>Generated: ").append(new SimpleDateFormat("dd MMM yyyy, HH:mm:ss").format(new Date())).append("</p>\n");
+        html.append("</div>\n");
+    }
+
+    private static void addStatisticsDashboard(StringBuilder html) {
+        int activeCourses = 0;
+        int inactiveCourses = 0;
+        Set<String> categories = new HashSet<>();
+        
+        for (int i = 0; i < allCoursesData.length(); i++) {
+            try {
+                JSONObject course = allCoursesData.getJSONObject(i);
+                String status = course.optString("status", course.optString("is_active", "1"));
+                if ("1".equals(status) || "active".equalsIgnoreCase(status)) {
+                    activeCourses++;
+                } else {
+                    inactiveCourses++;
+                }
+                
+                String category = course.optString("category", course.optString("category_name", ""));
+                if (!category.isEmpty()) {
+                    categories.add(category);
+                }
+            } catch (Exception e) {}
+        }
+        
+        html.append("<div class='stats-dashboard'>\n");
+        html.append("<div class='stats-grid'>\n");
+        
+        html.append("<div class='stat-box'>\n");
+        html.append("<div class='label'>📚 Total Courses</div>\n");
+        html.append("<div class='value' id='visibleCount'>").append(allCoursesData.length()).append("</div>\n");
+        html.append("</div>\n");
+        
+        html.append("<div class='stat-box active'>\n");
+        html.append("<div class='label'>✅ Active Courses</div>\n");
+        html.append("<div class='value'>").append(activeCourses).append("</div>\n");
+        html.append("</div>\n");
+        
+        html.append("<div class='stat-box inactive'>\n");
+        html.append("<div class='label'>❌ Inactive Courses</div>\n");
+        html.append("<div class='value'>").append(inactiveCourses).append("</div>\n");
+        html.append("</div>\n");
+        
+        html.append("<div class='stat-box categories'>\n");
+        html.append("<div class='label'>📂 Categories</div>\n");
+        html.append("<div class='value'>").append(categories.size()).append("</div>\n");
+        html.append("</div>\n");
+        
+        html.append("</div>\n");
+        html.append("</div>\n");
+    }
+
+    private static void addSearchFilterSection(StringBuilder html) {
+        html.append("<div class='search-filter'>\n");
+        html.append("<div class='search-box'>\n");
+        html.append("<input type='text' id='searchInput' placeholder='🔍 Search by name, ID, category, price, status...' onkeyup='searchCourses()'>\n");
+        html.append("<span class='search-icon'>🔍</span>\n");
+        html.append("</div>\n");
+        
+        html.append("<div class='filter-buttons'>\n");
+        html.append("<button class='filter-btn active' onclick='filterByStatus(\"all\")'>All Courses</button>\n");
+        html.append("<button class='filter-btn' onclick='filterByStatus(\"active\")'>✅ Active Only</button>\n");
+        html.append("<button class='filter-btn' onclick='filterByStatus(\"inactive\")'>❌ Inactive Only</button>\n");
+        html.append("</div>\n");
+        html.append("</div>\n");
+    }
+
+    private static void addCoursesSection(StringBuilder html) {
+        html.append("<div class='courses-section'>\n");
+        html.append("<div class='courses-grid'>\n");
+        
+        html.append("<script>\nallCourses = [\n");
+        
+        for (int i = 0; i < allCoursesData.length(); i++) {
+            try {
+                JSONObject course = allCoursesData.getJSONObject(i);
+                
+                // Store in JavaScript array
+                html.append(course.toString().replace("\\", "\\\\").replace("'", "\\'"));
+                if (i < allCoursesData.length() - 1) {
+                    html.append(",\n");
+                }
+                
+                String courseId = course.optString("id", 
+                                course.optString("plan_id", 
+                                course.optString("course_id", "ID-" + (i+1))));
+                
+                String status = course.optString("status", course.optString("is_active", "1"));
+                boolean isActive = "1".equals(status) || "active".equalsIgnoreCase(status);
+                
+                html.append("</script>\n");
+                
+                html.append("<div class='course-card' data-status='").append(isActive ? "active" : "inactive").append("'>\n");
+                
+                // Course Header with ID and Status
+                html.append("<div class='course-header'>\n");
+                html.append("<span class='course-id'>ID: ").append(escapeHtml(courseId)).append("</span>\n");
+                html.append("<span class='status-badge ").append(isActive ? "active" : "inactive").append("'>");
+                html.append(isActive ? "✅ ACTIVE" : "❌ INACTIVE").append("</span>\n");
+                html.append("</div>\n");
+                
+                // Course Title
+                String title = course.optString("title", 
+                              course.optString("name", 
+                              course.optString("plan_name", 
+                              course.optString("course_name", "Course " + (i+1)))));
+                html.append("<div class='course-title'>").append(escapeHtml(title)).append("</div>\n");
+                
+                // Badges Section
+                html.append("<div class='course-badges'>\n");
+                
+                if (course.has("category") && !course.isNull("category")) {
+                    html.append("<span class='badge'>📚 ").append(escapeHtml(course.getString("category"))).append("</span>\n");
+                }
+                if (course.has("category_name") && !course.isNull("category_name")) {
+                    html.append("<span class='badge'>📚 ").append(escapeHtml(course.getString("category_name"))).append("</span>\n");
+                }
+                if (course.has("type") && !course.isNull("type")) {
+                    html.append("<span class='badge'>🎯 ").append(escapeHtml(course.getString("type"))).append("</span>\n");
+                }
+                if (course.has("plan_type") && !course.isNull("plan_type")) {
+                    html.append("<span class='badge'>🎯 ").append(escapeHtml(course.getString("plan_type"))).append("</span>\n");
+                }
+                if (course.has("mode") && !course.isNull("mode")) {
+                    html.append("<span class='badge'>💻 ").append(escapeHtml(course.getString("mode"))).append("</span>\n");
+                }
+                
+                html.append("</div>\n");
+                
+                // Price Section
+                html.append("<div class='price-section'>\n");
+                String currentPrice = course.optString("price", 
+                                    course.optString("amount", 
+                                    course.optString("final_price", 
+                                    course.optString("selling_price", ""))));
+                
+                if (!currentPrice.isEmpty()) {
+                    html.append("<span class='current-price'>₹").append(escapeHtml(currentPrice)).append("</span>");
+                    
+                    String originalPrice = course.optString("original_price", 
+                                         course.optString("mrp", 
+                                         course.optString("actual_price", "")));
+                    
+                    if (!originalPrice.isEmpty() && !originalPrice.equals(currentPrice)) {
+                        html.append("<span class='original-price'>₹").append(escapeHtml(originalPrice)).append("</span>");
+                        
+                        try {
+                            double current = Double.parseDouble(currentPrice);
+                            double original = Double.parseDouble(originalPrice);
+                            if (original > current) {
+                                int discount = (int) (((original - current) / original) * 100);
+                                html.append("<span class='discount-badge'>").append(discount).append("% OFF</span>");
+                            }
+                        } catch (Exception e) {}
+                    }
+                }
+                html.append("</div>\n");
+                
+                // Description
+                if (course.has("description") && !course.isNull("description")) {
+                    String desc = course.getString("description");
+                    if (!desc.isEmpty()) {
+                        html.append("<div class='course-description'>").append(escapeHtml(desc)).append("</div>\n");
+                    }
+                }
+                
+                // Detailed Information Grid
+                html.append("<div class='course-details'>\n");
+                
+                // Collect all available details
+                addDetailIfExists(html, course, "validity", "⏳ Validity");
+                addDetailIfExists(html, course, "valid_days", "⏳ Valid Days", " days");
+                addDetailIfExists(html, course, "duration", "⏱️ Duration");
+                addDetailIfExists(html, course, "tests_count", "📝 Tests");
+                addDetailIfExists(html, course, "total_tests", "📝 Total Tests");
+                addDetailIfExists(html, course, "subjects", "📖 Subjects");
+                addDetailIfExists(html, course, "language", "🌐 Language");
+                addDetailIfExists(html, course, "center", "📍 Center");
+                addDetailIfExists(html, course, "created_at", "📅 Created");
+                addDetailIfExists(html, course, "updated_at", "🔄 Updated");
+                addDetailIfExists(html, course, "source_category_id", "🔖 Category ID");
+                
+                // Add any custom fields
+                Iterator<String> keys = course.keys();
+                int fieldCount = 0;
+                while (keys.hasNext() && fieldCount < 20) {
+                    String key = keys.next();
+                    if (!isCommonField(key) && !course.isNull(key)) {
+                        try {
+                            String value = course.get(key).toString();
+                            if (!value.isEmpty() && value.length() < 100) {
+                                html.append("<div class='detail-item'>\n");
+                                html.append("<span class='label'>").append(escapeHtml(formatFieldName(key))).append("</span>\n");
+                                html.append("<span class='value'>").append(escapeHtml(value)).append("</span>\n");
+                                html.append("</div>\n");
+                                fieldCount++;
+                            }
+                        } catch (Exception e) {}
+                    }
+                }
+                
+                html.append("</div>\n");
+                
+                // View JSON Button
+                html.append("<button class='view-json-btn' onclick='viewCourseJSON(").append(i).append(")'>📋 View Complete JSON</button>\n");
+                
+                html.append("</div>\n");
+                
+                html.append("<script>\n");
+                
+            } catch (Exception e) {
+                System.out.println("  ⚠ Error processing course " + i + ": " + e.getMessage());
+            }
+        }
+        
+        html.append("];\n</script>\n");
+        html.append("</div>\n");
+        html.append("</div>\n");
+    }
+
+    private static void addDetailIfExists(StringBuilder html, JSONObject course, String key, String label) {
+        addDetailIfExists(html, course, key, label, "");
+    }
+
+    private static void addDetailIfExists(StringBuilder html, JSONObject course, String key, String label, String suffix) {
+        if (course.has(key) && !course.isNull(key)) {
+            try {
+                String value = course.getString(key);
+                if (!value.isEmpty()) {
+                    html.append("<div class='detail-item'>\n");
+                    html.append("<span class='label'>").append(label).append("</span>\n");
+                    html.append("<span class='value'>").append(escapeHtml(value)).append(suffix).append("</span>\n");
+                    html.append("</div>\n");
+                }
+            } catch (Exception e) {}
+        }
+    }
+
+    private static boolean isCommonField(String key) {
+        String[] commonFields = {
+            "id", "plan_id", "course_id", "title", "name", "plan_name", "course_name",
+            "description", "price", "amount", "final_price", "selling_price",
+            "original_price", "mrp", "actual_price", "category", "category_name",
+            "type", "plan_type", "mode", "status", "is_active", "validity",
+            "valid_days", "duration", "tests_count", "total_tests", "subjects",
+            "language", "center", "created_at", "updated_at", "source_category_id"
+        };
+        
+        for (String field : commonFields) {
+            if (field.equals(key)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String formatFieldName(String key) {
+        return key.replace("_", " ").toUpperCase();
+    }
+
+    private static void addRawDataSection(StringBuilder html) {
+        html.append("<div class='raw-data-section'>\n");
+        html.append("<h2>📊 Complete Raw API Response</h2>\n");
+        html.append("<button class='copy-btn' onclick='copyJSON()'>📋 Copy All JSON Data</button>\n");
+        html.append("<div class='json-container'>\n");
+        html.append("<pre id='rawJSON'>");
+        
+        try {
+            JSONObject completeData = new JSONObject();
+            completeData.put("total_courses", allCoursesData.length());
+            completeData.put("generated_at", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
+            completeData.put("courses", allCoursesData);
+            
+            if (fullAPIResponse != null) {
+                completeData.put("original_api_response", fullAPIResponse);
+            }
+            
+            html.append(escapeHtml(completeData.toString(2)));
+        } catch (Exception e) {
+            html.append("Error generating JSON: ").append(e.getMessage());
+        }
+        
+        html.append("</pre>\n");
+        html.append("</div>\n");
+        html.append("</div>\n");
+    }
+
+    private static void addFooterSection(StringBuilder html, String timestamp) {
+        html.append("<div class='footer'>\n");
+        html.append("<p>🤖 DAMS Enhanced API Data Fetcher</p>\n");
+        html.append("<p>📅 Generated: ").append(new SimpleDateFormat("dd MMM yyyy, HH:mm:ss").format(new Date())).append("</p>\n");
+        html.append("<p>📊 Total Courses Extracted: ").append(allCoursesData.length()).append("</p>\n");
+        html.append("<p>🌐 API Endpoint: https://api.damsdelhi.com/v2_data_model/get_all_plan_by_category_id</p>\n");
+        html.append("<p>✨ All course data including IDs, status, pricing, validity, and custom fields</p>\n");
+        html.append("</div>\n");
     }
 
     private static String escapeHtml(String text) {
@@ -488,610 +729,6 @@ public class DamsDelhiLogin {
         System.out.println("✓ Driver ready\n");
     }
 
-    private static void login() {
-        System.out.println("Starting login...");
-        
-        driver.get("https://www.damsdelhi.com/");
-        sleep(3);
-        
-        try {
-            WebElement signInBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
-                By.xpath("//button[contains(text(), 'Sign in') or contains(text(), 'Sign In')]")));
-            js.executeScript("arguments[0].click();", signInBtn);
-            System.out.println("  ✓ Clicked: Sign In button");
-            sleep(3);
-        } catch (Exception e) {
-            try {
-                WebElement signInBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
-                    By.xpath("//a[contains(text(), 'Sign in') or contains(text(), 'Sign In')]")));
-                js.executeScript("arguments[0].click();", signInBtn);
-                System.out.println("  ✓ Clicked: Sign In link");
-                sleep(3);
-            } catch (Exception e2) {
-                System.out.println("  ✗ Could not find sign in element");
-            }
-        }
-        
-        enterText(By.xpath("//input[@type='tel' or @type='number' or contains(@placeholder, 'number')]"), 
-                  "+919456628016", "Phone");
-        sleep(2);
-        
-        clickElement(By.className("common-bottom-btn"), "Request OTP");
-        sleep(3);
-        
-        try {
-            WebElement logoutBtn = driver.findElement(
-                By.xpath("//button[contains(@class, 'btndata') and contains(text(), 'Logout')]"));
-            js.executeScript("arguments[0].click();", logoutBtn);
-            System.out.println("  ✓ Clicked Logout popup");
-            sleep(3);
-        } catch (Exception e) {
-            System.out.println("  ℹ No logout popup");
-        }
-        
-        enterText(By.xpath("//input[@type='text' or @type='number' or contains(@placeholder, 'OTP')]"), 
-                  "2000", "OTP");
-        sleep(2);
-        
-        clickElement(By.className("common-bottom-btn"), "Submit OTP");
-        sleep(5);
-        
-        System.out.println("✓ Login successful\n");
-    }
-
-    private static void navigateToCBTSectionViaHamburger() {
-        System.out.println("Navigating to CBT section via Hamburger menu...");
-        
-        try {
-            try {
-                WebElement dropdown = wait.until(ExpectedConditions.presenceOfElementLocated(
-                    By.xpath("//button[contains(@class, 'SelectCat')]")));
-                js.executeScript("arguments[0].scrollIntoView({block: 'center'});", dropdown);
-                sleep(1);
-                js.executeScript("arguments[0].click();", dropdown);
-                System.out.println("  ✓ Clicked: Course Dropdown");
-                sleep(3);
-            } catch (Exception e) {
-                System.out.println("  ⚠ Skipping dropdown: " + e.getMessage());
-            }
-            
-            try {
-                List<WebElement> options = driver.findElements(
-                    By.xpath("//span[contains(text(), 'NEET PG')] | //div[contains(text(), 'NEET PG')]"));
-                for (WebElement option : options) {
-                    if (option.isDisplayed()) {
-                        js.executeScript("arguments[0].click();", option);
-                        System.out.println("  ✓ Selected: NEET PG");
-                        sleep(3);
-                        break;
-                    }
-                }
-            } catch (Exception e) {
-                System.out.println("  ⚠ Skipping NEET PG selection");
-            }
-            
-            try {
-                WebElement closeBtn = driver.findElement(
-                    By.xpath("//button[@type='button' and @aria-label='Close'] | //span[contains(@class, 'ant-modal-close')]"));
-                js.executeScript("arguments[0].click();", closeBtn);
-                System.out.println("  ✓ Closed modal");
-                sleep(2);
-            } catch (Exception e) {
-                System.out.println("  ℹ No modal to close");
-            }
-            
-            boolean hamburgerClicked = false;
-            try {
-                WebElement hamburger = wait.until(ExpectedConditions.presenceOfElementLocated(
-                    By.className("humburgerIcon")));
-                js.executeScript("arguments[0].scrollIntoView({block: 'center'});", hamburger);
-                sleep(1);
-                js.executeScript("arguments[0].click();", hamburger);
-                System.out.println("  ✓ Clicked: Hamburger Menu");
-                hamburgerClicked = true;
-                sleep(3);
-            } catch (Exception e) {
-                System.out.println("  ✗ Failed to click hamburger: " + e.getMessage());
-            }
-            
-            if (!hamburgerClicked) {
-                System.out.println("  ✗ Could not open hamburger menu!");
-                return;
-            }
-            
-            boolean cbtClicked = false;
-            By[] cbtSelectors = {
-                By.xpath("//div[contains(@class, 'Categories')]//div[contains(text(), 'CBT')]"),
-                By.xpath("//div[contains(@class, 'Categories')]//*[contains(text(), 'CBT')]"),
-                By.xpath("//button[contains(., 'CBT')]"),
-                By.xpath("//*[@role='button' and contains(., 'CBT')]"),
-                By.xpath("//*[contains(text(), 'CBT') and not(contains(text(), 'NEET'))]")
-            };
-            
-            for (By selector : cbtSelectors) {
-                try {
-                    List<WebElement> cbtElements = driver.findElements(selector);
-                    for (WebElement cbtElem : cbtElements) {
-                        if (cbtElem.isDisplayed()) {
-                            String elemText = cbtElem.getText().trim();
-                            if (elemText.equals("CBT") || elemText.equalsIgnoreCase("cbt")) {
-                                js.executeScript("arguments[0].scrollIntoView({block: 'center'});", cbtElem);
-                                sleep(1);
-                                js.executeScript("arguments[0].click();", cbtElem);
-                                System.out.println("  ✓ Clicked: CBT button");
-                                cbtClicked = true;
-                                sleep(3);
-                                break;
-                            }
-                        }
-                    }
-                    if (cbtClicked) break;
-                } catch (Exception e) {
-                    System.out.println("    Trying next selector...");
-                }
-            }
-            
-            if (!cbtClicked) {
-                System.out.println("  ✗ Could not click CBT button!");
-                return;
-            }
-            
-            try {
-                WebElement okBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
-                    By.xpath("//button[@type='button' and contains(@class, 'btn-danger') and contains(text(), 'OK')]")));
-                js.executeScript("arguments[0].scrollIntoView({block: 'center'});", okBtn);
-                sleep(1);
-                js.executeScript("arguments[0].click();", okBtn);
-                System.out.println("  ✓ Clicked: OK Button (Red)");
-                sleep(3);
-            } catch (Exception e) {
-                System.out.println("  ℹ No OK button to click");
-            }
-            
-            System.out.println("✓ Successfully navigated to CBT section\n");
-            
-        } catch (Exception e) {
-            System.out.println("✗ Error navigating to CBT section: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
-    private static List<String> discoverCBTCourses() {
-        System.out.println("Discovering CBT courses...");
-        List<String> courses = new ArrayList<>();
-        
-        try {
-            System.out.println("  → Waiting for CBT page to load completely...");
-            sleep(5);
-            
-            js.executeScript("window.scrollTo(0, 0);");
-            sleep(2);
-            
-            long lastHeight = (Long) js.executeScript("return document.body.scrollHeight");
-            int stableCount = 0;
-            
-            System.out.println("  → Scrolling to load all courses...");
-            while (stableCount < 3) {
-                js.executeScript("window.scrollBy(0, 500);");
-                sleep(1);
-                long newHeight = (Long) js.executeScript("return document.body.scrollHeight");
-                if (newHeight == lastHeight) {
-                    stableCount++;
-                } else {
-                    stableCount = 0;
-                    lastHeight = newHeight;
-                }
-            }
-            
-            js.executeScript("window.scrollTo(0, 0);");
-            sleep(2);
-            
-            List<WebElement> buyNowButtons = driver.findElements(
-                By.xpath("//button[@type='button' and contains(@class, 'butBtn') and contains(@class, 'modal_show')]"));
-            
-            System.out.println("  → Found " + buyNowButtons.size() + " Buy Now buttons");
-            
-            if (buyNowButtons.isEmpty()) {
-                System.out.println("  ✗ No Buy Now buttons found!");
-                return courses;
-            }
-            
-            int coursesToProcess = Math.min(3, buyNowButtons.size());
-            System.out.println("  → Processing EXACTLY " + coursesToProcess + " courses (LIMITED TO 3)");
-            
-            for (int i = 0; i < coursesToProcess; i++) {
-                WebElement button = buyNowButtons.get(i);
-                try {
-                    js.executeScript("arguments[0].scrollIntoView({block: 'center'});", button);
-                    sleep(1);
-                    
-                    WebElement container = button.findElement(By.xpath("./ancestor::div[contains(@class, 'col')]"));
-                    
-                    String courseName = "";
-                    
-                    try {
-                        WebElement titleElem = container.findElement(
-                            By.xpath(".//h3 | .//h4 | .//h5 | .//*[contains(@class, 'title') or contains(@class, 'heading')]"));
-                        courseName = titleElem.getText().trim();
-                        System.out.println("  → Method 1: Found title: " + courseName);
-                    } catch (Exception e) {}
-                    
-                    if (courseName.isEmpty()) {
-                        try {
-                            WebElement linkElem = container.findElement(
-                                By.xpath(".//a[string-length(normalize-space(text())) > 15]"));
-                            courseName = linkElem.getText().trim();
-                            System.out.println("  → Method 2: Found link text: " + courseName);
-                        } catch (Exception e) {}
-                    }
-                    
-                    if (courseName.isEmpty()) {
-                        String allText = container.getText();
-                        String[] lines = allText.split("\n");
-                        for (String line : lines) {
-                            line = line.trim();
-                            if (isValidCBTCourseName(line)) {
-                                courseName = line;
-                                System.out.println("  → Method 3: Found from text: " + courseName);
-                                break;
-                            }
-                        }
-                    }
-                    
-                    if (!courseName.isEmpty() && isValidCBTCourseName(courseName)) {
-                        courses.add(courseName);
-                        System.out.println("  ✓ Found course: " + courseName);
-                    } else {
-                        courseName = "CBT Course " + (i + 1);
-                        courses.add(courseName);
-                        System.out.println("  → Using generic name: " + courseName);
-                    }
-                } catch (Exception e) {
-                    System.out.println("  ⚠ Skipped course " + (i + 1) + ": " + e.getMessage());
-                }
-            }
-            
-            List<String> uniqueCourses = new ArrayList<>(new LinkedHashSet<>(courses));
-            return uniqueCourses;
-            
-        } catch (Exception e) {
-            System.out.println("✗ Error discovering courses: " + e.getMessage());
-            e.printStackTrace();
-            return courses;
-        }
-    }
-
-    private static boolean isValidCBTCourseName(String text) {
-        if (text == null || text.length() < 10) return false;
-        
-        String lower = text.toLowerCase();
-        
-        if (!lower.contains("all india") && !lower.contains("dams") && 
-            !lower.contains("neet") && !lower.contains("mds") && 
-            !lower.contains("fmge") && !lower.contains("combo") && 
-            !lower.contains("cbt") && !lower.contains("test")) {
-            return false;
-        }
-        
-        String[] invalid = {
-            "test instructions", "buy now", "registration", "exam date", 
-            "noida", "delhi", "select", "choose", "click here", "view details",
-            "registration last date", "download app", "app store", "google play",
-            "view qr", "screenshot"
-        };
-        
-        for (String term : invalid) {
-            if (lower.equals(term) || lower.contains("₹")) {
-                return false;
-            }
-        }
-        
-        return true;
-    }
-
-    private static void processCBTCourse(String courseName, int courseIndex) {
-        String timestamp = timeFormat.format(new Date());
-        String screenshotPath = null;
-        String errorMsg = null;
-        
-        try {
-            List<WebElement> buyButtons = driver.findElements(
-                By.xpath("//button[contains(@class, 'butBtn') and contains(@class, 'modal_show')]"));
-            
-            if (courseIndex < buyButtons.size()) {
-                WebElement buyBtn = buyButtons.get(courseIndex);
-                js.executeScript("arguments[0].scrollIntoView({block: 'center'});", buyBtn);
-                sleep(2);
-                js.executeScript("arguments[0].click();", buyBtn);
-                System.out.println("  ✓ Step 1: Clicked Buy Now");
-                sleep(3);
-            } else {
-                throw new Exception("Buy button not found for index " + courseIndex);
-            }
-            
-            try {
-                WebElement cbtModal = wait.until(ExpectedConditions.visibilityOfElementLocated(
-                    By.xpath("//div[@class='popup' and .//div[@id='cbt_hide']]")));
-                System.out.println("  ✓ CBT Modal detected");
-                
-                WebElement cbtRadioLabel = cbtModal.findElement(
-                    By.xpath(".//label[contains(normalize-space(), 'CBT (Center Based Test)')]"));
-                js.executeScript("arguments[0].click();", cbtRadioLabel);
-                System.out.println("  ✓ Clicked 'CBT (Center Based Test)'");
-                sleep(1);
-                
-                WebElement modalOkButton = cbtModal.findElement(
-                    By.xpath(".//button[normalize-space()='OK']"));
-                js.executeScript("arguments[0].click();", modalOkButton);
-                System.out.println("  ✓ Clicked OK on CBT modal");
-                sleep(3);
-                
-            } catch (Exception e) {
-                System.out.println("  ℹ CBT Modal skipped");
-            }
-            
-            try {
-                WebElement flexBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
-                    By.xpath("//button[contains(@class, 'show_data_city')]")));
-                js.executeScript("arguments[0].scrollIntoView({block: 'center'});", flexBtn);
-                sleep(1);
-                js.executeScript("arguments[0].click();", flexBtn);
-                System.out.println("  ✓ Step 2: Clicked Flex Button");
-                sleep(2);
-            } catch (Exception e) {
-                System.out.println("  ℹ Flex button skipped");
-            }
-            
-            try {
-                WebElement delhiBtn = driver.findElement(
-                    By.xpath("//button[contains(text(), 'Delhi') or contains(@data-city, 'Delhi')]"));
-                js.executeScript("arguments[0].click();", delhiBtn);
-                System.out.println("  ✓ Step 3: Selected Delhi");
-                sleep(2);
-            } catch (Exception e) {
-                System.out.println("  ℹ Delhi selection skipped");
-            }
-            
-            try {
-                WebElement redBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
-                    By.xpath("//button[contains(@class, 'btn-danger') and contains(@class, 'btn-block')]")));
-                js.executeScript("arguments[0].scrollIntoView({block: 'center'});", redBtn);
-                sleep(1);
-                js.executeScript("arguments[0].click();", redBtn);
-                System.out.println("  ✓ Step 4: Clicked Red Button");
-                sleep(3);
-            } catch (Exception e) {
-                System.out.println("  ⚠ Red button not found");
-            }
-            
-            try {
-                WebElement paytm = null;
-                By[] paytmSelectors = {
-                    By.xpath("//label[.//span[contains(text(), 'Paytm')]]"),
-                    By.xpath("//span[contains(text(), 'Paytm')]/ancestor::label"),
-                    By.xpath("//input[@value='paytm']/parent::label"),
-                    By.xpath("//*[contains(text(), 'Paytm')]")
-                };
-                
-                for (By selector : paytmSelectors) {
-                    try {
-                        paytm = wait.until(ExpectedConditions.presenceOfElementLocated(selector));
-                        if (paytm.isDisplayed()) {
-                            break;
-                        }
-                    } catch (Exception e) {}
-                }
-                
-                if (paytm != null) {
-                    js.executeScript("arguments[0].click();", paytm);
-                    System.out.println("  ✓ Step 5: Selected Paytm");
-                    sleep(2);
-                }
-            } catch (Exception e) {
-                System.out.println("  ℹ Paytm selection skipped");
-            }
-            
-            try {
-                WebElement paymentBtn = null;
-                By[] paymentSelectors = {
-                    By.xpath("//button[@type='button' and contains(@class, 'ant-btn-primary') and contains(@class, 'ant-btn-block')]"),
-                    By.xpath("//button[contains(text(), 'Pay') or contains(text(), 'Proceed')]"),
-                    By.xpath("//button[contains(@class, 'btn-primary') and contains(@class, 'btn-block')]")
-                };
-                
-                for (By selector : paymentSelectors) {
-                    try {
-                        paymentBtn = wait.until(ExpectedConditions.presenceOfElementLocated(selector));
-                        if (paymentBtn.isDisplayed()) {
-                            break;
-                        }
-                    } catch (Exception e) {}
-                }
-                
-                if (paymentBtn != null) {
-                    js.executeScript("arguments[0].click();", paymentBtn);
-                    System.out.println("  ✓ Step 6: Clicked Payment Button");
-                    sleep(2);
-                }
-            } catch (Exception e) {
-                System.out.println("  ⚠ Payment button issue");
-            }
-            
-            System.out.println("  ⏳ Step 7: Waiting for QR code (max 60s)...");
-            WebDriverWait qrWait = new WebDriverWait(driver, Duration.ofSeconds(60));
-            
-            try {
-                By qrLocator = By.xpath("//canvas | //img[contains(@class, 'qr') or contains(@class, 'QR') or contains(@src, 'data:image')]");
-                qrWait.until(ExpectedConditions.presenceOfElementLocated(qrLocator));
-                System.out.println("  ✓ QR code detected");
-                sleep(2);
-            } catch (Exception e) {
-                System.out.println("  ⚠ QR wait timeout");
-            }
-            
-            String fileTimestamp = fileFormat.format(new Date());
-            String filename = "screenshots/CBT_QR_" + courseName.replaceAll("[^a-zA-Z0-9]", "_") + 
-                            "_" + fileTimestamp + ".png";
-            
-            File screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
-            copyFile(screenshot, new File(filename));
-            screenshotPath = filename;
-            System.out.println("  ✓ Step 8: Screenshot saved: " + filename);
-            
-            closePaymentWindow();
-            System.out.println("  ✓ Step 9: Closed payment window");
-            
-            courseResults.add(new CourseResult(courseName, "SUCCESS", timestamp, screenshotPath, null));
-            totalSuccessful++;
-            System.out.println("  ✅ Course processed successfully");
-            
-        } catch (Exception e) {
-            errorMsg = e.getMessage();
-            courseResults.add(new CourseResult(courseName, "FAILED", timestamp, screenshotPath, errorMsg));
-            totalFailed++;
-            System.out.println("  ❌ Course processing failed: " + errorMsg);
-            e.printStackTrace();
-        }
-    }
-
-    private static void returnToCBTSection() {
-        try {
-            System.out.println("\n  → Returning to CBT section...");
-            
-            driver.get("https://www.damsdelhi.com/");
-            sleep(3);
-            
-            boolean hamburgerClicked = false;
-            try {
-                WebElement hamburger = wait.until(ExpectedConditions.presenceOfElementLocated(
-                    By.className("humburgerIcon")));
-                js.executeScript("arguments[0].click();", hamburger);
-                System.out.println("  ✓ Clicked Hamburger");
-                hamburgerClicked = true;
-                sleep(2);
-            } catch (Exception e) {
-                System.out.println("  ✗ Failed hamburger");
-            }
-            
-            if (!hamburgerClicked) return;
-            
-            boolean cbtClicked = false;
-            By[] cbtSelectors = {
-                By.xpath("//div[contains(@class, 'Categories')]//div[contains(text(), 'CBT')]"),
-                By.xpath("//div[contains(@class, 'Categories')]//*[contains(text(), 'CBT')]"),
-                By.xpath("//*[contains(text(), 'CBT') and not(contains(text(), 'NEET'))]")
-            };
-            
-            for (By selector : cbtSelectors) {
-                try {
-                    List<WebElement> cbtElements = driver.findElements(selector);
-                    for (WebElement cbtElem : cbtElements) {
-                        if (cbtElem.isDisplayed() && cbtElem.getText().trim().equals("CBT")) {
-                            js.executeScript("arguments[0].click();", cbtElem);
-                            System.out.println("  ✓ Clicked CBT");
-                            cbtClicked = true;
-                            sleep(2);
-                            break;
-                        }
-                    }
-                    if (cbtClicked) break;
-                } catch (Exception e) {}
-            }
-            
-            if (!cbtClicked) {
-                System.out.println("  ✗ Failed to click CBT");
-                return;
-            }
-            
-            try {
-                WebElement okBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
-                    By.xpath("//button[@type='button' and contains(@class, 'btn-danger') and contains(text(), 'OK')]")));
-                js.executeScript("arguments[0].click();", okBtn);
-                System.out.println("  ✓ Clicked OK Button");
-                sleep(3);
-            } catch (Exception e) {
-                System.out.println("  ✗ Failed OK button");
-            }
-            
-        } catch (Exception e) {
-            System.out.println("  ⚠ Error returning to CBT: " + e.getMessage());
-        }
-    }
-
-    private static void closePaymentWindow() {
-        try {
-            By[] closeSelectors = {
-                By.xpath("//span[contains(@class, 'ptm-cross') and @id='app-close-btn']"),
-                By.id("app-close-btn"),
-                By.xpath("//span[contains(@class, 'ptm-cross')]")
-            };
-            
-            for (By selector : closeSelectors) {
-                try {
-                    WebElement closeBtn = driver.findElement(selector);
-                    js.executeScript("arguments[0].click();", closeBtn);
-                    System.out.println("  ✓ Closed payment window");
-                    sleep(8);
-                    break;
-                } catch (Exception e) {}
-            }
-            
-            By[] skipSelectors = {
-                By.xpath("//button[contains(@class, 'ptm-feedback-btn') and contains(text(), 'Skip')]"),
-                By.xpath("//button[contains(text(), 'Skip')]")
-            };
-            
-            for (By selector : skipSelectors) {
-                try {
-                    WebElement skipBtn = driver.findElement(selector);
-                    js.executeScript("arguments[0].click();", skipBtn);
-                    sleep(2);
-                    break;
-                } catch (Exception e) {}
-            }
-            
-            By[] modalSelectors = {
-                By.xpath("//span[contains(@class, 'ant-modal-close-x')]"),
-                By.xpath("//button[contains(@class, 'ant-modal-close')]")
-            };
-            
-            for (By selector : modalSelectors) {
-                try {
-                    WebElement modalBtn = driver.findElement(selector);
-                    js.executeScript("arguments[0].click();", modalBtn);
-                    sleep(2);
-                    break;
-                } catch (Exception e) {}
-            }
-            
-        } catch (Exception e) {
-            System.out.println("  ⚠ Issue closing payment");
-        }
-    }
-
-    private static void clickElement(By locator, String name) {
-        try {
-            WebElement elem = wait.until(ExpectedConditions.presenceOfElementLocated(locator));
-            js.executeScript("arguments[0].scrollIntoView({block: 'center'});", elem);
-            sleep(1);
-            js.executeScript("arguments[0].click();", elem);
-            System.out.println("  ✓ Clicked: " + name);
-        } catch (Exception e) {
-            System.out.println("  ✗ Failed to click: " + name);
-        }
-    }
-
-    private static void enterText(By locator, String text, String fieldName) {
-        try {
-            WebElement elem = wait.until(ExpectedConditions.presenceOfElementLocated(locator));
-            elem.clear();
-            elem.sendKeys(text);
-            System.out.println("  ✓ Entered: " + fieldName);
-        } catch (Exception e) {
-            System.out.println("  ✗ Failed to enter: " + fieldName);
-        }
-    }
-
     private static void sleep(int seconds) {
         try {
             Thread.sleep(seconds * 1000L);
@@ -1099,40 +736,4 @@ public class DamsDelhiLogin {
             Thread.currentThread().interrupt();
         }
     }
-
-    private static void copyFile(File source, File dest) throws Exception {
-        Files.copy(source.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
-    }
-
-    private static void generateDetailedReport() {
-        System.out.println("\nGenerating detailed HTML report...");
-        
-        try {
-            String timestamp = fileFormat.format(new Date());
-            String filename = "DAMS_CBT_Report_" + timestamp + ".html";
-            
-            double successRate = courseResults.isEmpty() ? 0 : 
-                (totalSuccessful * 100.0 / courseResults.size());
-            
-            StringBuilder html = new StringBuilder();
-            html.append("<!DOCTYPE html>\n<html>\n<head>\n");
-            html.append("<meta charset='UTF-8'>\n");
-            html.append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>\n");
-            html.append("<title>DAMS CBT Automation Report - ").append(timestamp).append("</title>\n");
-            html.append("<style>\n");
-            html.append("* { margin: 0; padding: 0; box-sizing: border-box; }\n");
-            html.append("body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 40px 20px; }\n");
-            html.append(".container { max-width: 1400px; margin: 0 auto; }\n");
-            html.append(".header { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); text-align: center; }\n");
-            html.append(".header h1 { color: #2d3748; font-size: 42px; font-weight: 700; margin-bottom: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }\n");
-            html.append(".header .subtitle { color: #718096; font-size: 16px; margin-top: 5px; }\n");
-            html.append(".header .timestamp { color: #a0aec0; font-size: 14px; margin-top: 10px; font-weight: 600; }\n");
-            html.append(".summary { background: white; border-radius: 20px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); }\n");
-            html.append(".summary h2 { color: #2d3748; font-size: 28px; font-weight: 600; margin-bottom: 25px; }\n");
-            html.append(".stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 25px; }\n");
-            html.append(".stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 15px; box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4); }\n");
-            html.append(".stat-card .label { font-size: 14px; opacity: 0.9; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }\n");
-            html.append(".stat-card .value { font-size: 48px; font-weight: 700; }\n");
-            html.append(".stat-card.success { background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); }\n");
-            html.append(".stat-card.failed { background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%); }\n");
-            html.append(".stat-card.rate { background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%
+}
