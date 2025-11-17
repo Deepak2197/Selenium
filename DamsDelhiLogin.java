@@ -106,26 +106,54 @@ public class DamsCompleteSolution {
         }
     }
 
-    // ==================== API DATA FETCHING ====================
+    // ==================== UPDATED API DATA FETCHING WITH POST ====================
     
     private static void fetchAPIData() {
-        System.out.println("📡 Fetching data from API...");
+        System.out.println("📡 Fetching data from API using POST...");
         StringBuilder response = new StringBuilder();
         
         try {
             URL url = new URL("https://api.damsdelhi.com/v2_data_model/get_all_plan_by_category_id");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("GET");
-            conn.setRequestProperty("Accept", "application/json");
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0");
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout(10000);
+            
+            // Set POST method
+            conn.setRequestMethod("POST");
+            conn.setDoOutput(true);
+            
+            // Set all required headers from the browser request
+            conn.setRequestProperty("Accept", "application/json, text/plain, */*");
+            conn.setRequestProperty("Accept-Encoding", "gzip, deflate, br, zstd");
+            conn.setRequestProperty("Accept-Language", "en-US,en;q=0.9");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Origin", "https://www.damsdelhi.com");
+            conn.setRequestProperty("Referer", "https://www.damsdelhi.com/");
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1");
+            conn.setRequestProperty("sec-fetch-dest", "empty");
+            conn.setRequestProperty("sec-fetch-mode", "cors");
+            conn.setRequestProperty("sec-fetch-site", "same-site");
+            
+            // Add custom headers
+            conn.setRequestProperty("api_version", "1.0");
+            conn.setRequestProperty("device_type", "web");
+            conn.setRequestProperty("device_info", "web-browser");
+            
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(15000);
+            
+            // Send POST data (empty JSON object or add required payload)
+            String jsonInputString = "{}";
+            
+            try(OutputStream os = conn.getOutputStream()) {
+                byte[] input = jsonInputString.getBytes("utf-8");
+                os.write(input, 0, input.length);
+            }
             
             int responseCode = conn.getResponseCode();
             System.out.println("   Response Code: " + responseCode);
             
-            if (responseCode == 200) {
-                BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                // Read response
+                BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream(), "utf-8"));
                 String inputLine;
                 
                 while ((inputLine = in.readLine()) != null) {
@@ -136,8 +164,29 @@ public class DamsCompleteSolution {
                 apiRawData = response.toString();
                 System.out.println("   ✓ Data fetched successfully");
                 System.out.println("   Data length: " + apiRawData.length() + " characters");
+                
+                // Print first 500 characters as preview
+                if (apiRawData.length() > 0) {
+                    System.out.println("\n   📄 Response Preview:");
+                    System.out.println("   " + apiRawData.substring(0, Math.min(500, apiRawData.length())) + "...\n");
+                }
             } else {
                 System.out.println("   ✗ Failed with response code: " + responseCode);
+                
+                // Try to read error stream
+                try {
+                    BufferedReader errorReader = new BufferedReader(
+                        new InputStreamReader(conn.getErrorStream(), "utf-8"));
+                    String errorLine;
+                    StringBuilder errorResponse = new StringBuilder();
+                    while ((errorLine = errorReader.readLine()) != null) {
+                        errorResponse.append(errorLine);
+                    }
+                    errorReader.close();
+                    System.out.println("   Error Response: " + errorResponse.toString());
+                } catch (Exception e) {
+                    System.out.println("   Could not read error stream");
+                }
             }
             
             conn.disconnect();
@@ -148,8 +197,10 @@ public class DamsCompleteSolution {
         }
     }
     
+    // ==================== ENHANCED HTML GENERATION ====================
+    
     private static void generateAPIHTML() {
-        System.out.println("\n📄 Generating API Data HTML page...");
+        System.out.println("📄 Generating API Data HTML page...");
         
         try {
             String timestamp = fileFormat.format(new Date());
@@ -234,7 +285,8 @@ public class DamsCompleteSolution {
             html.append("            letter-spacing: 1px;\n");
             html.append("        }\n");
             html.append("        .stat-card .value { color: #667eea; font-size: 36px; font-weight: 700; }\n");
-            html.append("        .copy-btn {\n");
+            html.append("        .btn-group { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }\n");
+            html.append("        .copy-btn, .download-btn {\n");
             html.append("            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n");
             html.append("            color: white;\n");
             html.append("            border: none;\n");
@@ -243,13 +295,23 @@ public class DamsCompleteSolution {
             html.append("            font-size: 16px;\n");
             html.append("            font-weight: 600;\n");
             html.append("            cursor: pointer;\n");
-            html.append("            margin-bottom: 20px;\n");
             html.append("            transition: all 0.3s;\n");
             html.append("        }\n");
-            html.append("        .copy-btn:hover {\n");
+            html.append("        .download-btn { background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); }\n");
+            html.append("        .copy-btn:hover, .download-btn:hover {\n");
             html.append("            transform: translateY(-2px);\n");
             html.append("            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);\n");
             html.append("        }\n");
+            html.append("        .api-info {\n");
+            html.append("            background: #f7fafc;\n");
+            html.append("            padding: 20px;\n");
+            html.append("            border-radius: 10px;\n");
+            html.append("            margin-bottom: 20px;\n");
+            html.append("            font-family: monospace;\n");
+            html.append("            font-size: 13px;\n");
+            html.append("        }\n");
+            html.append("        .api-info .method { color: #48bb78; font-weight: bold; }\n");
+            html.append("        .api-info .url { color: #667eea; word-break: break-all; }\n");
             html.append("        .footer { text-align: center; color: white; padding: 20px; font-size: 14px; }\n");
             html.append("        @media (max-width: 768px) {\n");
             html.append("            .header h1 { font-size: 28px; }\n");
@@ -267,6 +329,20 @@ public class DamsCompleteSolution {
             html.append("            <p class='subtitle' style='margin-top: 10px; font-weight: 600;'>")
                 .append(new SimpleDateFormat("dd MMM yyyy, HH:mm:ss").format(new Date()))
                 .append("</p>\n");
+            html.append("        </div>\n");
+            
+            // API Info
+            html.append("        <div class='content-box'>\n");
+            html.append("            <h2>🔗 API Request Details</h2>\n");
+            html.append("            <div class='api-info'>\n");
+            html.append("                <div><span class='method'>POST</span> <span class='url'>https://api.damsdelhi.com/v2_data_model/get_all_plan_by_category_id</span></div>\n");
+            html.append("                <div style='margin-top: 10px;'><strong>Headers:</strong></div>\n");
+            html.append("                <div>• Content-Type: application/json</div>\n");
+            html.append("                <div>• Origin: https://www.damsdelhi.com</div>\n");
+            html.append("                <div>• User-Agent: Mozilla/5.0 (iPhone; CPU iPhone OS 18_5...)</div>\n");
+            html.append("                <div>• api_version: 1.0</div>\n");
+            html.append("                <div>• device_type: web</div>\n");
+            html.append("            </div>\n");
             html.append("        </div>\n");
             
             // Stats
@@ -288,7 +364,10 @@ public class DamsCompleteSolution {
             // Content Box
             html.append("        <div class='content-box'>\n");
             html.append("            <h2>📊 Complete API Response</h2>\n");
-            html.append("            <button class='copy-btn' onclick='copyToClipboard()'>📋 Copy JSON Data</button>\n");
+            html.append("            <div class='btn-group'>\n");
+            html.append("                <button class='copy-btn' onclick='copyToClipboard()'>📋 Copy JSON Data</button>\n");
+            html.append("                <button class='download-btn' onclick='downloadJSON()'>💾 Download JSON</button>\n");
+            html.append("            </div>\n");
             html.append("            <div class='json-container' id='jsonData'>\n");
             html.append("                <pre>").append(escapeHtml(formatJSON(apiRawData))).append("</pre>\n");
             html.append("            </div>\n");
@@ -296,8 +375,8 @@ public class DamsCompleteSolution {
             
             // Footer
             html.append("        <div class='footer'>\n");
-            html.append("            <p>🤖 Generated from DAMS API</p>\n");
-            html.append("            <p>🔗 API URL: https://api.damsdelhi.com/v2_data_model/get_all_plan_by_category_id</p>\n");
+            html.append("            <p>🤖 Generated from DAMS API Automation</p>\n");
+            html.append("            <p>📅 ").append(new SimpleDateFormat("EEEE, dd MMMM yyyy").format(new Date())).append("</p>\n");
             html.append("        </div>\n");
             html.append("    </div>\n");
             
@@ -309,7 +388,20 @@ public class DamsCompleteSolution {
             html.append("                alert('✅ JSON data copied to clipboard!');\n");
             html.append("            }).catch(function(err) {\n");
             html.append("                console.error('Copy failed:', err);\n");
+            html.append("                alert('❌ Failed to copy. Please copy manually.');\n");
             html.append("            });\n");
+            html.append("        }\n");
+            html.append("        function downloadJSON() {\n");
+            html.append("            const jsonText = document.getElementById('jsonData').innerText;\n");
+            html.append("            const blob = new Blob([jsonText], { type: 'application/json' });\n");
+            html.append("            const url = URL.createObjectURL(blob);\n");
+            html.append("            const a = document.createElement('a');\n");
+            html.append("            a.href = url;\n");
+            html.append("            a.download = 'dams_api_data_").append(timestamp).append(".json';\n");
+            html.append("            document.body.appendChild(a);\n");
+            html.append("            a.click();\n");
+            html.append("            document.body.removeChild(a);\n");
+            html.append("            URL.revokeObjectURL(url);\n");
             html.append("        }\n");
             html.append("    </script>\n");
             html.append("</body>\n");
@@ -321,7 +413,7 @@ public class DamsCompleteSolution {
             writer.close();
             
             System.out.println("   ✓ API HTML page created: " + filename);
-            System.out.println("   File size: " + (html.length() / 1024) + " KB");
+            System.out.println("   File size: " + (html.length() / 1024) + " KB\n");
             
         } catch (Exception e) {
             System.out.println("   ✗ Error creating HTML: " + e.getMessage());
@@ -417,88 +509,6 @@ public class DamsCompleteSolution {
             try {
                 WebElement signInBtn = wait.until(ExpectedConditions.presenceOfElementLocated(
                     By.xpath("//a[contains(text(), 'Sign in') or contains(text(), 'Sign In')]")));
-                js.executeScript("arguments[0].click();", signInBtn);
-                System.out.println("  ✓ Clicked: Sign In link");
-                sleep(3);
-            } catch (Exception e2) {
-                System.out.println("  ✗ Could not find sign in element");
-            }
-        }
-        
-        enterText(By.xpath("//input[@type='tel' or @type='number' or contains(@placeholder, 'number')]"), 
-                  "+919456628016", "Phone");
-        sleep(2);
-        
-        clickElement(By.className("common-bottom-btn"), "Request OTP");
-        sleep(3);
-        
-        try {
-            WebElement logoutBtn = driver.findElement(
-                By.xpath("//button[contains(@class, 'btndata') and contains(text(), 'Logout')]"));
-            js.executeScript("arguments[0].click();", logoutBtn);
-            System.out.println("  ✓ Clicked Logout popup");
-            sleep(3);
-        } catch (Exception e) {
-            System.out.println("  ℹ No logout popup");
-        }
-        
-        enterText(By.xpath("//input[@type='text' or @type='number' or contains(@placeholder, 'OTP')]"), 
-                  "2000", "OTP");
-        sleep(2);
-        
-        clickElement(By.className("common-bottom-btn"), "Submit OTP");
-        sleep(5);
-        
-        System.out.println("✓ Login successful\n");
-    }
-
-    private static void navigateToCBTSectionViaHamburger() {
-        System.out.println("Navigating to CBT section via Hamburger menu...");
-        
-        try {
-            try {
-                WebElement dropdown = wait.until(ExpectedConditions.presenceOfElementLocated(
-                    By.xpath("//button[contains(@class, 'SelectCat')]")));
-                js.executeScript("arguments[0].scrollIntoView({block: 'center'});", dropdown);
-                sleep(1);
-                js.executeScript("arguments[0].click();", dropdown);
-                System.out.println("  ✓ Clicked: Course Dropdown");
-                sleep(3);
-            } catch (Exception e) {
-                System.out.println("  ⚠ Skipping dropdown");
-            }
-            
-            try {
-                List<WebElement> options = driver.findElements(
-                    By.xpath("//span[contains(text(), 'NEET PG')] | //div[contains(text(), 'NEET PG')]"));
-                for (WebElement option : options) {
-                    if (option.isDisplayed()) {
-                        js.executeScript("arguments[0].click();", option);
-                        System.out.println("  ✓ Selected: NEET PG");
-                        sleep(3);
-                        break;
-                    }
-                }
-            } catch (Exception e) {
-                System.out.println("  ⚠ Skipping NEET PG selection");
-            }
-            
-            try {
-                WebElement closeBtn = driver.findElement(
-                    By.xpath("//button[@type='button' and @aria-label='Close'] | //span[contains(@class, 'ant-modal-close')]"));
-                js.executeScript("arguments[0].click();", closeBtn);
-                System.out.println("  ✓ Closed modal");
-                sleep(2);
-            } catch (Exception e) {
-                System.out.println("  ℹ No modal to close");
-            }
-            
-            boolean hamburgerClicked = false;
-            try {
-                WebElement hamburger = wait.until(ExpectedConditions.presenceOfElementLocated(
-                    By.className("humburgerIcon")));
-                js.executeScript("arguments[0].scrollIntoView({block: 'center'});", hamburger);
-                sleep(1);
                 js.executeScript("arguments[0].click();", hamburger);
                 System.out.println("  ✓ Clicked: Hamburger Menu");
                 hamburgerClicked = true;
@@ -888,9 +898,6 @@ public class DamsCompleteSolution {
             String timestamp = fileFormat.format(new Date());
             String filename = "DAMS_CBT_Report_" + timestamp + ".html";
             
-            double successRate = courseResults.isEmpty() ? 0 : 
-                (totalSuccessful * 100.0 / courseResults.size());
-            
             StringBuilder html = new StringBuilder();
             html.append("<!DOCTYPE html>\n<html>\n<head>\n");
             html.append("<meta charset='UTF-8'>\n");
@@ -991,4 +998,86 @@ public class DamsCompleteSolution {
                    .replace("\"", "&quot;")
                    .replace("'", "&#39;");
     }
-}
+}].click();", signInBtn);
+                System.out.println("  ✓ Clicked: Sign In link");
+                sleep(3);
+            } catch (Exception e2) {
+                System.out.println("  ✗ Could not find sign in element");
+            }
+        }
+        
+        enterText(By.xpath("//input[@type='tel' or @type='number' or contains(@placeholder, 'number')]"), 
+                  "+919456628016", "Phone");
+        sleep(2);
+        
+        clickElement(By.className("common-bottom-btn"), "Request OTP");
+        sleep(3);
+        
+        try {
+            WebElement logoutBtn = driver.findElement(
+                By.xpath("//button[contains(@class, 'btndata') and contains(text(), 'Logout')]"));
+            js.executeScript("arguments[0].click();", logoutBtn);
+            System.out.println("  ✓ Clicked Logout popup");
+            sleep(3);
+        } catch (Exception e) {
+            System.out.println("  ℹ No logout popup");
+        }
+        
+        enterText(By.xpath("//input[@type='text' or @type='number' or contains(@placeholder, 'OTP')]"), 
+                  "2000", "OTP");
+        sleep(2);
+        
+        clickElement(By.className("common-bottom-btn"), "Submit OTP");
+        sleep(5);
+        
+        System.out.println("✓ Login successful\n");
+    }
+
+    private static void navigateToCBTSectionViaHamburger() {
+        System.out.println("Navigating to CBT section via Hamburger menu...");
+        
+        try {
+            try {
+                WebElement dropdown = wait.until(ExpectedConditions.presenceOfElementLocated(
+                    By.xpath("//button[contains(@class, 'SelectCat')]")));
+                js.executeScript("arguments[0].scrollIntoView({block: 'center'});", dropdown);
+                sleep(1);
+                js.executeScript("arguments[0].click();", dropdown);
+                System.out.println("  ✓ Clicked: Course Dropdown");
+                sleep(3);
+            } catch (Exception e) {
+                System.out.println("  ⚠ Skipping dropdown");
+            }
+            
+            try {
+                List<WebElement> options = driver.findElements(
+                    By.xpath("//span[contains(text(), 'NEET PG')] | //div[contains(text(), 'NEET PG')]"));
+                for (WebElement option : options) {
+                    if (option.isDisplayed()) {
+                        js.executeScript("arguments[0].click();", option);
+                        System.out.println("  ✓ Selected: NEET PG");
+                        sleep(3);
+                        break;
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("  ⚠ Skipping NEET PG selection");
+            }
+            
+            try {
+                WebElement closeBtn = driver.findElement(
+                    By.xpath("//button[@type='button' and @aria-label='Close'] | //span[contains(@class, 'ant-modal-close')]"));
+                js.executeScript("arguments[0].click();", closeBtn);
+                System.out.println("  ✓ Closed modal");
+                sleep(2);
+            } catch (Exception e) {
+                System.out.println("  ℹ No modal to close");
+            }
+            
+            boolean hamburgerClicked = false;
+            try {
+                WebElement hamburger = wait.until(ExpectedConditions.presenceOfElementLocated(
+                    By.className("humburgerIcon")));
+                js.executeScript("arguments[0].scrollIntoView({block: 'center'});", hamburger);
+                sleep(1);
+                js.executeScript("arguments[0
