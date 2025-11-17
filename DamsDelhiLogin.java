@@ -16,11 +16,10 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.ArrayList;
 
-public class DamsMergedAutomation {
+public class DamsCompleteSolution {
 
     // =================================================================
     // PART 1: API CONFIGURATION (Backend Data)
@@ -46,7 +45,7 @@ public class DamsMergedAutomation {
     private final String STUDENT_OTP = "2000";
 
     // Constructor for Selenium Setup
-    public DamsMergedAutomation() {
+    public DamsCompleteSolution() {
         System.out.println("⚙️ Setting up Chrome Driver...");
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--start-maximized");
@@ -66,16 +65,15 @@ public class DamsMergedAutomation {
         System.out.println("║   DAMS COMPLETE AUTOMATION SYSTEM          ║");
         System.out.println("╚════════════════════════════════════════════╝\n");
 
-        // 
         // PHASE 1: API Data Extraction & Reporting
+        // This fetches the raw JSON data from the server
+        
         System.out.println("🔵 PHASE 1: API REPORT GENERATION");
         runApiPhase();
 
-        // 
-
-[Image of login process flow diagram]
-
         // PHASE 2: Selenium Browser Automation
+        // This automates the user interaction on the website
+        
         System.out.println("\n🔵 PHASE 2: BROWSER AUTOMATION");
         runSeleniumPhase();
     }
@@ -163,7 +161,7 @@ public class DamsMergedAutomation {
     // PHASE 2 METHODS: SELENIUM LOGIC
     // =================================================================
     private static void runSeleniumPhase() {
-        DamsMergedAutomation bot = new DamsMergedAutomation();
+        DamsCompleteSolution bot = new DamsCompleteSolution();
         try {
             // Step 1: Login
             if (bot.loginToDamsDelhi()) {
