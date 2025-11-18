@@ -1,8 +1,9 @@
-// IMPORTANT: Save this file as TestWithApi.java in the ROOT of your repository
+package SelenuimTest.SelenuimTest1;
+
 import java.io.*;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter; 
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.regex.*;
 import org.openqa.selenium.*;
@@ -26,12 +27,11 @@ public class TestWithApi {
     private static String screenshotDir = System.getProperty("user.dir") + "/test-report/screenshots/";
     private static String reportDir = System.getProperty("user.dir") + "/test-report/";
 
-    // Constants
-    private static final String DEVICE_TOKEN_FALLBACK = "61797743405"; 
-    private static final String DEVICE_TYPE = "3";
+    // --- Constants & API Configuration ---
     private static final String API_URL = "https://api.damsdelhi.com/v2_data_model/get_all_plan_by_category_id";
     private static final String USER_ID_OVERRIDE = "161444";
     private static final String DEVICE_TOKEN_OVERRIDE = "61797743405";
+    private static final String DEVICE_TYPE = "3";
     private static final String STREAM_ID = "1";
     private static final String API_VERSION = "25";
     private static final String DEVICE_INFO_MOCK = "{\"model\":\"chrome_driver\",\"os\":\"linux\",\"app\":\"dams\"}";
@@ -39,59 +39,54 @@ public class TestWithApi {
     public static void main(String[] args) {
         log("🚀 DAMS Automation Started");
         log("Environment: " + (System.getenv("CI") != null ? "GitHub Actions (CI)" : "Local"));
-        
+
         try {
-            // Setup Chrome Options
+            // --- 1. Setup Chrome Options (CI & Local) ---
             ChromeOptions options = new ChromeOptions();
             
-            String ciEnv = System.getenv("CI");
-            if ("true".equals(ciEnv)) {
-                log("🔧 Configuring for CI environment (headless mode)");
+            if (System.getenv("CI") != null) {
+                log("🔧 Configuring for CI environment (Headless Mode)");
                 options.addArguments("--headless=new");
                 options.addArguments("--no-sandbox");
                 options.addArguments("--disable-dev-shm-usage");
                 options.addArguments("--disable-gpu");
                 options.addArguments("--window-size=1920,1080");
-                options.addArguments("--disable-extensions");
                 options.addArguments("--remote-allow-origins=*");
-                options.addArguments("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+                options.addArguments("--disable-extensions");
             } else {
-                log("🔧 Configuring for local environment");
+                log("🔧 Configuring for Local environment");
                 options.addArguments("--remote-allow-origins=*");
             }
             
+            // Common options
             options.addArguments("--disable-notifications");
             options.addArguments("--ignore-certificate-errors");
-            
-            log("🌐 Initializing Chrome WebDriver...");
+
             driver = new ChromeDriver(options);
-            driver.manage().window().maximize();
+            if (System.getenv("CI") == null) {
+                driver.manage().window().maximize();
+            }
+            
             driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(10));
-            driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(60));
-            wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+            wait = new WebDriverWait(driver, Duration.ofSeconds(30));
             log("✅ WebDriver initialized successfully");
 
-            // --- STEP 1: Navigation and Login ---
-            log("📍 STEP 1: Navigating to DAMS website");
+            // --- 2. Navigation and Login ---
+            log("📍 Navigating to DAMS website...");
             driver.get("https://www.damsdelhi.com/");
-            waitFor(3);
-            log("✅ Page loaded: " + driver.getCurrentUrl());
 
-            log("🔐 STEP 2: Starting login process");
             clickElement(By.className("loginbtnSignupbtn"), "Login/Signup button");
             
-            WebElement phoneInput = wait.until(ExpectedConditions.elementToBeClickable(
-                By.cssSelector(".react-international-phone-input")));
+            WebElement phoneInput = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector(".react-international-phone-input")));
             phoneInput.clear();
             phoneInput.sendKeys("7897897897");
             
-            clickElement(By.className("common-bottom-btn"), "Mobile submit button");
+            clickElement(By.className("common-bottom-btn"), "Mobile Submit button");
             log("✅ Mobile number entered");
 
-            waitFor(3); 
+            waitFor(4); 
 
-            // --- FIX: Handle "Logout & Continue" optionally ---
-            // This button only appears if logged in elsewhere. If not found, we shouldn't crash.
+            // Handle "Logout & Continue" Popup (Optional check)
             try {
                 log("❓ Checking for 'Logout & Continue' popup...");
                 WebElement logoutBtn = new WebDriverWait(driver, Duration.ofSeconds(3))
@@ -110,8 +105,7 @@ public class TestWithApi {
             
             for (int i = 0; i < pinFields.size() && i < pinDigits.length; i++) {
                 WebElement field = pinFields.get(i);
-                field.sendKeys(pinDigits[i]);
-                Thread.sleep(100); 
+                wait.until(ExpectedConditions.elementToBeClickable(field)).sendKeys(pinDigits[i]);
             }
             log("✅ PIN entered");
 
@@ -121,112 +115,78 @@ public class TestWithApi {
             
             waitFor(3);
 
-            // --- STEP 3: Navigate to Course Selection ---
-            log("📚 STEP 3: Selecting course category");
-            WebElement categoryButton = wait.until(ExpectedConditions.elementToBeClickable(
-                By.xpath("//button[normalize-space()='NEET PG NEXT']")));
+            // --- 3. Navigate to Course Selection ---
+            log("📚 Selecting course category...");
+            WebElement categoryButton = wait.until(ExpectedConditions.elementToBeClickable(By.xpath("//button[normalize-space()='NEET PG NEXT']")));
             categoryButton.click();
             log("✅ Clicked NEET PG NEXT");
 
-            waitFor(2);
-
             String labelText = "NURSING (DSSSB, SGPGI, ESIC, RBB, KGMU)";
-            WebElement radioLabel = wait.until(ExpectedConditions.elementToBeClickable(
-                By.xpath("//span[text()='" + labelText + "']/parent::label")));
+            WebElement radioLabel = wait.until(ExpectedConditions.elementToBeClickable(By.xpath("//span[text()='" + labelText + "']/parent::label")));
             radioLabel.click();
-            log("✅ Selected: " + labelText);
+            log("✅ Selected Category: " + labelText);
 
             waitFor(2);
 
-            // --- STEP 4: Plan Selection ---
-            log("💳 STEP 4: Selecting plan");
+            // --- 4. Plan Selection ---
+            log("💳 Selecting Plan...");
             By goProButton = By.xpath("//button[contains(., 'Premium') and contains(., 'Go Pro')]");
             clickElementJS(goProButton, "Go Pro button");
-            
-            waitFor(2);
-            
+
             By buyNowButton = By.xpath("//button[contains(@class, 'plan-actions')]//h5[contains(text(), 'Buy Now')]");
             clickElementJS(buyNowButton, "Buy Now button");
 
-            waitFor(2);
-            
             By planButton = By.xpath("//button[contains(@class, 'boxrate')]//h3[normalize-space(text())='3 Months']/parent::button");
-            clickElementJS(planButton, "3 Months plan");
+            clickElementJS(planButton, "3 Months Plan");
 
-            waitFor(2);
-            
             By placeOrderButton = By.xpath("//button[contains(@class,'btn-danger')]//h6[contains(normalize-space(.), 'Place Order')]");
             clickElementJS(placeOrderButton, "Place Order button");
             log("✅ Order placed");
 
             waitFor(3);
             
-            // --- STEP 5: Payment Method ---
-            log("💰 STEP 5: Selecting payment method");
+            // --- 5. Payment Method ---
+            log("💰 Selecting Payment Method...");
             By paytmRadioLocator = By.xpath("//label[.//span[normalize-space(text())='Paytm']]");
-            clickElement(paytmRadioLocator, "Paytm option");
+            clickElement(paytmRadioLocator, "Paytm Option");
 
-            waitFor(2);
-            
             By payNowLocator = By.xpath("//button[.//span[normalize-space(text())='Pay Now']]");
             clickElement(payNowLocator, "Pay Now button");
-            log("✅ Proceeding to payment");
+            log("✅ Proceeding to payment page");
 
-            // --- STEP 6: Capture Data ---
-            log("📸 STEP 6: Capturing screenshot and extracting data");
-            waitFor(6);
+            // --- 6. Capture Data & Screenshot ---
+            waitFor(5);
             
             String screenshotPath = takeScreenshot("PaymentConfirmation");
-            if (screenshotPath != null) {
-                log("✅ Screenshot saved: " + new File(screenshotPath).getName());
-            }
+            if(screenshotPath != null) log("📸 Screenshot captured: " + new File(screenshotPath).getName());
 
             Map<String, String> authHeaders = extractAuthFromStorage();
-            log("🔐 Authentication data extracted");
+            log("🔐 Authentication Data Extracted");
 
-            // --- STEP 7: API Call ---
-            log("🌐 STEP 7: Calling API");
+            // --- 7. Call API ---
+            log("🌐 Calling API...");
             String apiResponse = callPlanAPI(authHeaders);
+            log("📥 API Response Length: " + apiResponse.length());
             
-            if (apiResponse.contains("\"status\":true")) {
-                log("✅ API call successful");
-                int planCount = countOccurrences(apiResponse, "\"id\":");
-                log("📊 Plans retrieved: " + planCount);
-            } else {
-                log("⚠️ API response indicates an issue");
-            }
-
-            // --- STEP 8: Generate Report ---
-            log("📝 STEP 8: Generating HTML report");
+            // --- 8. Generate Report ---
             generateHTMLReport(apiResponse);
-            log("✅ Report generated successfully");
+            log("✅ Execution Completed Successfully");
 
         } catch (Exception e) {
             log("❌ FATAL ERROR: " + e.getMessage());
             e.printStackTrace();
             takeScreenshot("FatalError");
-            
-            try {
-                generateHTMLReport("{\"status\":false,\"message\":\"Fatal error: " + 
-                    e.getMessage().replaceAll("\"", "'") + "\"}");
-            } catch (Exception reportError) {
-                System.err.println("Could not generate error report: " + reportError.getMessage());
-            }
-            // Throw exception to fail the GitHub Action
-            throw new RuntimeException(e);
+            generateHTMLReport("{\"error\": \"FATAL ERROR: " + e.getMessage().replace("\"", "'") + "\"}");
+            throw new RuntimeException(e); // Fail the GitHub Action
         } finally {
             if (driver != null) {
-                try {
-                    driver.quit();
-                    log("🔒 Browser closed");
-                } catch (Exception e) {
-                    System.err.println("Error closing browser: " + e.getMessage());
-                }
+                driver.quit();
+                log("🔒 Browser Closed");
             }
-            
-            log("✅ Test execution completed");
         }
     }
+
+    // --- Utility Methods ---
 
     private static void waitFor(int seconds) {
         try {
@@ -239,34 +199,25 @@ public class TestWithApi {
     private static void clickElement(By locator, String elementName) {
         try {
             WebElement element = wait.until(ExpectedConditions.elementToBeClickable(locator));
-            ((JavascriptExecutor) driver).executeScript(
-                "arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element);
+            ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element);
             Thread.sleep(500);
             element.click();
             log("✅ Clicked: " + elementName);
         } catch (Exception e) {
-            log("⚠️ Standard click failed for " + elementName + ", trying JavaScript");
-            try {
-                WebElement element = driver.findElement(locator);
-                ((JavascriptExecutor) driver).executeScript("arguments[0].click();", element);
-                log("✅ Clicked (JS): " + elementName);
-            } catch (Exception ex) {
-                log("❌ Failed to click: " + elementName);
-                throw new RuntimeException("Could not click element: " + elementName, ex);
-            }
+            log("⚠️ Standard click failed for " + elementName + ", trying JS click...");
+            clickElementJS(locator, elementName);
         }
     }
 
     private static void clickElementJS(By locator, String elementName) {
         try {
             WebElement element = wait.until(ExpectedConditions.presenceOfElementLocated(locator));
-            ((JavascriptExecutor) driver).executeScript(
-                "arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element);
+            ((JavascriptExecutor) driver).executeScript("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element);
             Thread.sleep(500);
             ((JavascriptExecutor) driver).executeScript("arguments[0].click();", element);
             log("✅ Clicked (JS): " + elementName);
         } catch (Exception e) {
-            log("❌ JS click failed: " + elementName);
+            log("❌ Failed to click: " + elementName);
             throw new RuntimeException("Could not click element: " + elementName, e);
         }
     }
@@ -290,32 +241,42 @@ public class TestWithApi {
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
         String logEntry = "[" + timestamp + "] " + message;
         System.out.println(logEntry);
-        System.out.flush(); // Ensure it appears in CI logs immediately
+        System.out.flush(); 
         reportLogs.add(logEntry);
     }
+
+    // --- Authentication & API Methods ---
 
     private static Map<String, String> extractAuthFromStorage() {
         Map<String, String> authMap = new HashMap<>();
         try {
             JavascriptExecutor js = (JavascriptExecutor) driver;
 
-            String jwt = (String) js.executeScript(
-                "return window.localStorage.getItem('jwt_token') || window.sessionStorage.getItem('jwt_token');");
-            String timeStamp = (String) js.executeScript(
-                "return window.localStorage.getItem('time_stamp') || window.sessionStorage.getItem('time_stamp');");
+            String jwt = (String) js.executeScript("return window.localStorage.getItem('jwt_token') || window.sessionStorage.getItem('jwt_token');");
+            String timeStamp = (String) js.executeScript("return window.localStorage.getItem('time_stamp') || window.sessionStorage.getItem('time_stamp');");
 
             if (jwt != null) {
                 authMap.put("jwt_token", jwt);
-                log("✅ JWT token found");
+                log("✅ JWT Token found");
             } else {
-                log("❌ JWT token not found");
+                log("❌ JWT Token NOT found in storage");
             }
             
             authMap.put("user_id", USER_ID_OVERRIDE);
             authMap.put("device_token", DEVICE_TOKEN_OVERRIDE);
             
+            // Timestamp Logic
             if (timeStamp != null && !timeStamp.trim().isEmpty()) {
                 authMap.put("time_stamp", timeStamp);
+            } else if (jwt != null) {
+                // Try to decode JWT for timestamp
+                String payload = decodeJWTPayload(jwt);
+                String tsDateString = extractJsonValue(payload, "\"time[_sS]*stamp\"\\s*:\\s*\"([^\"]+)\"");
+                if (tsDateString != null) {
+                    authMap.put("time_stamp", toEpochMillis(tsDateString));
+                } else {
+                    authMap.put("time_stamp", String.valueOf(System.currentTimeMillis()));
+                }
             } else {
                 authMap.put("time_stamp", String.valueOf(System.currentTimeMillis()));
             }
@@ -326,39 +287,74 @@ public class TestWithApi {
         return authMap;
     }
 
+    private static String decodeJWTPayload(String jwt) {
+        try {
+            String[] parts = jwt.split("\\.");
+            if (parts.length < 2) return null;
+            String base64Payload = parts[1].replace('-', '+').replace('_', '/');
+            switch (base64Payload.length() % 4) {
+                case 2: base64Payload += "=="; break;
+                case 3: base64Payload += "="; break;
+            }
+            byte[] decoded = Base64.getDecoder().decode(base64Payload);
+            return new String(decoded, "UTF-8");
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String toEpochMillis(String dateTimeString) {
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            LocalDateTime localDateTime = LocalDateTime.parse(dateTimeString, formatter);
+            long epochMillis = localDateTime.atZone(ZoneId.of("UTC")).toInstant().toEpochMilli();
+            return String.valueOf(epochMillis);
+        } catch (Exception e) {
+            return String.valueOf(System.currentTimeMillis());
+        }
+    }
+
+    private static String extractJsonValue(String text, String regex) {
+        if (text == null) return null;
+        try {
+            Pattern p = Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
+            Matcher m = p.matcher(text);
+            if (m.find()) return m.group(1);
+        } catch (Exception e) { }
+        return null;
+    }
+
     private static String callPlanAPI(Map<String, String> auth) {
         StringBuilder response = new StringBuilder();
         try {
-            String jwt = auth.get("jwt_token");
-            if (jwt == null) jwt = ""; // Prevent null pointer, API will handle invalid token
-            
-            String userId = auth.getOrDefault("user_id", USER_ID_OVERRIDE);
-            String deviceToken = auth.getOrDefault("device_token", DEVICE_TOKEN_OVERRIDE);
-            String timeStamp = auth.getOrDefault("time_stamp", String.valueOf(System.currentTimeMillis()));
-            
+            if (!auth.containsKey("jwt_token") || auth.get("jwt_token").isEmpty()) {
+                log("❌ Missing JWT Token - API Call Aborted");
+                return "{\"status\":false,\"message\":\"Missing jwt_token\"}";
+            }
+
             URL url = new URL(API_URL);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             
-            conn.setRequestProperty("Content-Type", "application/json"); 
-            conn.setRequestProperty("Accept", "application/json"); 
-            conn.setRequestProperty("Authorization", "Bearer " + jwt);
-            conn.setRequestProperty("user_id", userId);
-            conn.setRequestProperty("device_token", deviceToken);
+            // Headers
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setRequestProperty("Authorization", "Bearer " + auth.get("jwt_token"));
+            conn.setRequestProperty("user_id", auth.get("user_id"));
+            conn.setRequestProperty("device_token", auth.get("device_token"));
             conn.setRequestProperty("device_type", DEVICE_TYPE);
-            conn.setRequestProperty("time_stamp", timeStamp);
+            conn.setRequestProperty("time_stamp", auth.get("time_stamp"));
             conn.setRequestProperty("stream_id", STREAM_ID);
             conn.setRequestProperty("api_version", API_VERSION);
             conn.setRequestProperty("device_info", DEVICE_INFO_MOCK);
 
             conn.setDoOutput(true);
             conn.setConnectTimeout(15000);
-            conn.setReadTimeout(15000);
 
-            String categoryId = "188";
+            // JSON Payload
             String jsonInputString = String.format(
                 "{\"user_id\": \"%s\", \"cat_id\": \"%s\"}", 
-                userId, categoryId
+                auth.get("user_id"), "188"
             );
             
             try (OutputStream os = conn.getOutputStream()) {
@@ -367,19 +363,17 @@ public class TestWithApi {
             }
 
             int status = conn.getResponseCode();
-            log("API Status: " + status);
+            log("🔄 API Status Code: " + status);
 
             InputStream is = (status >= 200 && status < 300) ? conn.getInputStream() : conn.getErrorStream();
-            
             if (is != null) {
                 try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, "utf-8"))) {
                     String line;
                     while ((line = reader.readLine()) != null) response.append(line);
                 }
             }
-
         } catch (Exception e) {
-            log("⚠️ API call failed: " + e.getMessage());
+            log("⚠️ API Call Failed: " + e.getMessage());
             return "{\"status\":false,\"message\":\"" + e.getMessage() + "\"}";
         }
         return response.toString();
@@ -389,38 +383,31 @@ public class TestWithApi {
         try {
             File reportDirFile = new File(reportDir);
             reportDirFile.mkdirs();
-            
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
             String htmlPath = reportDir + "DAMS_Report_" + timestamp + ".html";
             
             try (PrintWriter writer = new PrintWriter(new FileWriter(htmlPath))) {
-                writer.println("<!DOCTYPE html>");
-                writer.println("<html lang='en'><head>");
-                writer.println("<meta charset='UTF-8'>");
-                writer.println("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
-                writer.println("<title>DAMS Automation Report</title>");
-                writer.println("<style>body{font-family:sans-serif;padding:20px;}</style>");
-                writer.println("</head><body>");
-                writer.println("<h1>Automation Report</h1>");
-                writer.println("<h2>Logs</h2>");
-                for(String l : reportLogs) writer.println("<div>"+l+"</div>");
-                writer.println("<h2>API Response</h2>");
-                writer.println("<pre>" + apiResponse + "</pre>");
+                writer.println("<html><head><title>DAMS Automation Report</title>");
+                writer.println("<style>body{font-family:sans-serif;padding:20px;background:#f4f4f9;}");
+                writer.println("h2{color:#333;} .log{background:#fff;padding:8px;margin:5px 0;border-left:4px solid #007bff;font-family:monospace;}");
+                writer.println("pre{background:#222;color:#0f0;padding:15px;border-radius:5px;overflow-x:auto;}</style></head><body>");
+                writer.println("<h2>📊 Automation Test Report</h2>");
+                
+                writer.println("<h3>Execution Logs:</h3>");
+                for(String log : reportLogs) writer.println("<div class='log'>" + log + "</div>");
+                
+                writer.println("<h3>API Response:</h3>");
+                writer.println("<pre>" + formatJson(apiResponse) + "</pre>");
                 writer.println("</body></html>");
             }
-            System.out.println("✅ Report saved: " + htmlPath);
+            System.out.println("📄 Report Generated: " + htmlPath);
         } catch (Exception e) {
-            System.err.println("❌ Report generation failed: " + e.getMessage());
+            System.err.println("❌ Report Generation Failed: " + e.getMessage());
         }
     }
 
-    private static int countOccurrences(String text, String pattern) {
-        int count = 0;
-        int index = 0;
-        while ((index = text.indexOf(pattern, index)) != -1) {
-            count++;
-            index += pattern.length();
-        }
-        return count;
+    private static String formatJson(String json) {
+        if(json == null) return "";
+        return json.replace(",", ",\n").replace("{", "{\n").replace("}", "\n}");
     }
 }
