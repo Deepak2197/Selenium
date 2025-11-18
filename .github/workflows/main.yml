@@ -1,4 +1,4 @@
-name: DAMS CBT Automation (No Maven)
+name: DAMS API Automation with Report
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ on:
     branches:
       - main
     paths:
-      - '**.java'
+      - '**/*.java'
       - '.github/workflows/**'
 
 permissions:
@@ -25,7 +25,7 @@ permissions:
 jobs:
   automation:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 30
     
     steps:
       - name: 📥 Checkout Repository
@@ -53,14 +53,14 @@ jobs:
           echo "=== Java Version ==="
           java -version
           
-      - name: 📦 Download Selenium JARs - COMPLETE SET
+      - name: 📦 Download Selenium Dependencies
         run: |
           mkdir -p lib
           cd lib
           
-          echo "Downloading ALL required Selenium dependencies..."
+          echo "📥 Downloading Selenium JARs..."
           
-          # Core Selenium JARs
+          # Core Selenium
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-java/4.15.0/selenium-java-4.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-api/4.15.0/selenium-api-4.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chrome-driver/4.15.0/selenium-chrome-driver-4.15.0.jar
@@ -73,147 +73,197 @@ jobs:
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-devtools-v119/4.15.0/selenium-devtools-v119-4.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-os/4.15.0/selenium-os-4.15.0.jar
           
-          # Google dependencies
+          # Dependencies
           wget -q https://repo1.maven.org/maven2/com/google/guava/guava/32.1.3-jre/guava-32.1.3-jre.jar
           wget -q https://repo1.maven.org/maven2/com/google/guava/failureaccess/1.0.2/failureaccess-1.0.2.jar
           wget -q https://repo1.maven.org/maven2/com/google/auto/service/auto-service-annotations/1.1.1/auto-service-annotations-1.1.1.jar
-          
-          # HTTP and Networking
           wget -q https://repo1.maven.org/maven2/org/asynchttpclient/async-http-client/2.12.3/async-http-client-2.12.3.jar
           wget -q https://repo1.maven.org/maven2/io/netty/netty-all/4.1.100.Final/netty-all-4.1.100.Final.jar
           wget -q https://repo1.maven.org/maven2/org/apache/httpcomponents/client5/httpclient5/5.2.1/httpclient5-5.2.1.jar
           wget -q https://repo1.maven.org/maven2/org/apache/httpcomponents/core5/httpcore5/5.2.1/httpcore5-5.2.1.jar
           wget -q https://repo1.maven.org/maven2/org/apache/httpcomponents/core5/httpcore5-h2/5.2.1/httpcore5-h2-5.2.1.jar
-          
-          # Commons and Utilities
           wget -q https://repo1.maven.org/maven2/commons-io/commons-io/2.15.0/commons-io-2.15.0.jar
           wget -q https://repo1.maven.org/maven2/org/apache/commons/commons-exec/1.3/commons-exec-1.3.jar
           wget -q https://repo1.maven.org/maven2/commons-codec/commons-codec/1.16.0/commons-codec-1.16.0.jar
           wget -q https://repo1.maven.org/maven2/commons-logging/commons-logging/1.2/commons-logging-1.2.jar
-          
-          # Failsafe and Testing
           wget -q https://repo1.maven.org/maven2/dev/failsafe/failsafe/3.3.2/failsafe-3.3.2.jar
           wget -q https://repo1.maven.org/maven2/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar
-          
-          # Byte Buddy
           wget -q https://repo1.maven.org/maven2/net/bytebuddy/byte-buddy/1.14.9/byte-buddy-1.14.9.jar
-          
-          # SLF4J Logging
           wget -q https://repo1.maven.org/maven2/org/slf4j/slf4j-api/2.0.9/slf4j-api-2.0.9.jar
           wget -q https://repo1.maven.org/maven2/org/slf4j/slf4j-simple/2.0.9/slf4j-simple-2.0.9.jar
           
-          echo ""
-          echo "✓ All JARs downloaded successfully!"
-          echo ""
-          echo "Total files:"
-          ls -1 | wc -l
-          echo ""
-          echo "Total size:"
-          du -sh .
+          echo "✅ Downloaded $(ls -1 | wc -l) JAR files"
           
-      - name: 📁 Create Required Directories
+      - name: 📁 Create Directories
         run: |
-          mkdir -p screenshots
           mkdir -p compiled
-          echo "✓ Directories created"
+          mkdir -p test-report/screenshots
+          echo "✅ Directories created"
           
-      # ⭐⭐⭐ NAYA STEP - ChromeDriver Path Set Karo ⭐⭐⭐
-      - name: 🔧 Set ChromeDriver Path
+      - name: 🔧 Configure ChromeDriver
         run: |
           export PATH=$PATH:/usr/bin
           echo "PATH=$PATH" >> $GITHUB_ENV
-          which chromedriver
-          chromedriver --version
-          echo "✓ ChromeDriver path configured"
+          
+      - name: 📂 Check Java File Structure
+        run: |
+          echo "=== Repository Structure ==="
+          ls -la
+          echo ""
+          echo "=== Looking for Java files ==="
+          find . -name "*.java" -type f
+          echo ""
+          echo "=== Checking package structure ==="
+          if [ -f "TestWithApi.java" ]; then
+            echo "✅ Found TestWithApi.java in root"
+            head -5 TestWithApi.java
+          elif [ -f "SelenuimTest/SelenuimTest1/TestWithApi.java" ]; then
+            echo "✅ Found TestWithApi.java in package structure"
+            head -5 SelenuimTest/SelenuimTest1/TestWithApi.java
+          else
+            echo "⚠️ TestWithApi.java location unknown"
+          fi
           
       - name: 🏗️ Compile Java Code
         run: |
-          echo "Compiling DamsDelhiLogin.java..."
-          javac -cp "lib/*" -d compiled DamsDelhiLogin.java
+          echo "🔨 Attempting compilation..."
           
-          if [ $? -eq 0 ]; then
-            echo "✓ Compilation successful"
-            echo ""
-            echo "Compiled classes:"
-            ls -la compiled/
+          # Find the Java file
+          if [ -f "TestWithApi.java" ]; then
+            echo "Compiling from root directory..."
+            javac -cp "lib/*" -d compiled TestWithApi.java
+          elif [ -f "SelenuimTest/SelenuimTest1/TestWithApi.java" ]; then
+            echo "Compiling from package directory..."
+            javac -cp "lib/*" -d compiled SelenuimTest/SelenuimTest1/TestWithApi.java
           else
-            echo "✗ Compilation failed"
+            echo "❌ Cannot find TestWithApi.java"
             exit 1
           fi
           
-      # ⭐⭐⭐ TIMEOUT ADD KIYA ⭐⭐⭐
-      - name: 🚀 Run DAMS CBT Automation
+          if [ $? -eq 0 ]; then
+            echo "✅ Compilation successful"
+            echo ""
+            echo "Compiled classes:"
+            find compiled -name "*.class"
+          else
+            echo "❌ Compilation failed"
+            exit 1
+          fi
+          
+      - name: 🚀 Run Automation Test
         env:
           CI: true
-        timeout-minutes: 30
+        timeout-minutes: 25
         run: |
-          echo "Starting automation execution..."
+          echo "▶️  Starting DAMS automation..."
           echo "======================================"
-          java -cp "compiled:lib/*" DamsDelhiLogin
+          
+          # Try to run the compiled class
+          if [ -f "compiled/TestWithApi.class" ]; then
+            echo "Running from root package..."
+            java -cp "compiled:lib/*" TestWithApi 2>&1 || exit_code=$?
+          elif [ -f "compiled/SelenuimTest/SelenuimTest1/TestWithApi.class" ]; then
+            echo "Running from full package..."
+            java -cp "compiled:lib/*" SelenuimTest.SelenuimTest1.TestWithApi 2>&1 || exit_code=$?
+          else
+            echo "❌ Cannot find compiled TestWithApi.class"
+            find compiled -name "*.class"
+            exit 1
+          fi
+          
           echo ""
           echo "======================================"
-          echo "Execution completed"
+          
+          # Check exit code
+          if [ ${exit_code:-0} -eq 0 ]; then
+            echo "✅ Execution completed successfully"
+          else
+            echo "⚠️ Execution completed with exit code: ${exit_code:-0}"
+            # Don't fail the job - we want to see the report
+            exit 0
+          fi
         continue-on-error: true
         
       - name: 📊 Check Results
         if: always()
         run: |
-          echo "=== Execution Summary ===" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 Execution Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          if [ -d "screenshots" ]; then
-            screenshot_count=$(ls -1 screenshots/*.png 2>/dev/null | wc -l)
-            echo "- *Screenshots Generated*: $screenshot_count" >> $GITHUB_STEP_SUMMARY
+          # Check screenshots
+          if [ -d "test-report/screenshots" ]; then
+            screenshot_count=$(find test-report/screenshots -name "*.png" 2>/dev/null | wc -l)
+            echo "- **Screenshots Generated**: $screenshot_count" >> $GITHUB_STEP_SUMMARY
             
             if [ $screenshot_count -gt 0 ]; then
               echo "" >> $GITHUB_STEP_SUMMARY
-              echo "### Screenshots List:" >> $GITHUB_STEP_SUMMARY
-              for file in screenshots/*.png; do
+              echo "### 📸 Screenshots:" >> $GITHUB_STEP_SUMMARY
+              for file in test-report/screenshots/*.png; do
                 if [ -f "$file" ]; then
                   filename=$(basename "$file")
                   filesize=$(du -h "$file" | cut -f1)
-                  echo "- 📸 $filename ($filesize)" >> $GITHUB_STEP_SUMMARY
+                  echo "- 📷 \`$filename\` ($filesize)" >> $GITHUB_STEP_SUMMARY
                 fi
               done
             fi
           fi
           
-          if ls DAMS_CBT_Report_*.html 1> /dev/null 2>&1; then
-            report_file=$(ls DAMS_CBT_Report_*.html | head -1)
-            report_size=$(du -h "$report_file" | cut -f1)
-            echo "- *HTML Report*: Generated ✅ ($report_size)" >> $GITHUB_STEP_SUMMARY
+          # Check HTML reports
+          if ls test-report/DAMS_Report_*.html 1> /dev/null 2>&1; then
+            report_count=$(ls test-report/DAMS_Report_*.html | wc -l)
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- **HTML Reports**: $report_count generated ✅" >> $GITHUB_STEP_SUMMARY
+            
+            for report in test-report/DAMS_Report_*.html; do
+              if [ -f "$report" ]; then
+                report_name=$(basename "$report")
+                report_size=$(du -h "$report" | cut -f1)
+                echo "  - 📄 \`$report_name\` ($report_size)" >> $GITHUB_STEP_SUMMARY
+              fi
+            done
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- **HTML Reports**: ⚠️ No reports found" >> $GITHUB_STEP_SUMMARY
           fi
           
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- *Run ID*: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
-          echo "- *Triggered by*: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
-          
-      # ✅ ONLY GitHub Pages artifact will be created
-      # Screenshots and HTML reports will be included directly in Pages deployment
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "- **Run ID**: \`${{ github.run_id }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
       
-      - name: 📦 Prepare Files for GitHub Pages
+      - name: 📦 Prepare GitHub Pages Content
         if: always()
         run: |
-          mkdir -p ./github-pages-content/screenshots
+          mkdir -p github-pages-content/screenshots
           
-          # Copy HTML report
-          if ls DAMS_CBT_Report_*.html 1> /dev/null 2>&1; then
-            cp DAMS_CBT_Report_*.html ./github-pages-content/
-            echo "✓ HTML report copied"
+          # Copy HTML reports
+          if ls test-report/DAMS_Report_*.html 1> /dev/null 2>&1; then
+            cp test-report/DAMS_Report_*.html github-pages-content/
+            echo "✅ HTML reports copied"
+          else
+            echo "⚠️ No HTML reports found"
+            # Create a placeholder report
+            echo "<html><body><h1>No report generated yet</h1><p>The automation test did not complete successfully.</p></body></html>" > github-pages-content/placeholder.html
           fi
           
           # Copy screenshots
-          if [ -d "screenshots" ] && [ "$(ls -A screenshots)" ]; then
-            cp screenshots/*.png ./github-pages-content/screenshots/ 2>/dev/null || true
-            echo "✓ Screenshots copied"
+          if [ -d "test-report/screenshots" ] && [ "$(ls -A test-report/screenshots 2>/dev/null)" ]; then
+            cp test-report/screenshots/*.png github-pages-content/screenshots/ 2>/dev/null || true
+            screenshot_count=$(ls github-pages-content/screenshots/*.png 2>/dev/null | wc -l)
+            echo "✅ Copied $screenshot_count screenshots"
+          else
+            echo "⚠️ No screenshots found"
           fi
           
-          echo "✓ All files prepared for GitHub Pages"
-          ls -la ./github-pages-content/
-          ls -la ./github-pages-content/screenshots/ || true
+          echo ""
+          echo "📁 GitHub Pages content:"
+          ls -lah github-pages-content/ || echo "Empty"
+          echo ""
+          echo "📸 Screenshots:"
+          ls -lah github-pages-content/screenshots/ || echo "No screenshots"
       
-      # ✅ Upload as workflow artifact (for deploy-reports job)
-      - name: 📤 Upload GitHub Pages Content
+      - name: 📤 Upload GitHub Pages Artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -222,21 +272,31 @@ jobs:
           retention-days: 30
           if-no-files-found: warn
           
-      - name: 🐛 Debug Information
-        if: failure()
+      - name: 🐛 Debug Info
+        if: always()
         run: |
-          echo "=== Debug Information ==="
+          echo "=== Full Debug Information ==="
+          echo ""
+          echo "1. Current directory:"
           pwd
-          ls -la
           echo ""
-          echo "Screenshots:"
-          ls -la screenshots/ || echo "No screenshots"
+          echo "2. Directory tree:"
+          tree -L 3 || find . -maxdepth 3 -type f
           echo ""
-          echo "Compiled:"
-          ls -la compiled/ || echo "No compiled"
+          echo "3. Test report directory:"
+          ls -lah test-report/ 2>/dev/null || echo "test-report directory not found"
           echo ""
-          echo "Libraries:"
-          ls -la lib/ | head -20
+          echo "4. Screenshots:"
+          ls -lah test-report/screenshots/ 2>/dev/null || echo "Screenshots not found"
+          echo ""
+          echo "5. Compiled classes:"
+          find compiled -name "*.class" 2>/dev/null || echo "No compiled classes"
+          echo ""
+          echo "6. Java processes:"
+          ps aux | grep java || echo "No Java processes"
+          echo ""
+          echo "7. Chrome/ChromeDriver:"
+          ps aux | grep chrome || echo "No Chrome processes"
 
   deploy-reports:
     needs: automation
@@ -252,7 +312,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
       
     steps:
-      - name: 📥 Download GitHub Pages Content
+      - name: 📥 Download Artifacts
         uses: actions/download-artifact@v4
         with:
           name: github-pages-content
@@ -263,98 +323,130 @@ jobs:
         run: |
           mkdir -p ./reports
           
-          cat > ./reports/index.html << 'EOF'
+          cat > ./reports/index.html << 'HTMLEOF'
           <!DOCTYPE html>
           <html lang="en">
           <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>DAMS CBT Automation Reports</title>
+            <title>DAMS API Automation Reports</title>
             <style>
               * { margin: 0; padding: 0; box-sizing: border-box; }
               body { 
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                min-height: 100vh; 
-                padding: 40px 20px; 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                padding: 40px 20px;
               }
               .container { max-width: 1200px; margin: 0 auto; }
               .header { 
-                background: white; 
-                border-radius: 20px; 
-                padding: 40px; 
-                margin-bottom: 30px; 
-                box-shadow: 0 10px 40px rgba(0,0,0,0.1); 
-                text-align: center; 
+                background: white;
+                border-radius: 20px;
+                padding: 40px;
+                margin-bottom: 30px;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+                text-align: center;
               }
               .header h1 { 
-                color: #2d3748; 
-                font-size: 42px; 
-                font-weight: 700; 
-                margin-bottom: 10px;
+                font-size: 48px;
+                font-weight: 800;
+                margin-bottom: 15px;
                 background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 -webkit-background-clip: text;
                 -webkit-text-fill-color: transparent;
+                background-clip: text;
               }
-              .report-list { 
-                background: white; 
-                padding: 40px; 
-                border-radius: 20px; 
+              .header p { color: #718096; font-size: 16px; }
+              .section { 
+                background: white;
+                padding: 40px;
+                border-radius: 20px;
                 box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+                margin-bottom: 20px;
               }
-              .report-list h2 { color: #2d3748; margin-bottom: 20px; }
+              .section h2 { 
+                color: #2d3748;
+                font-size: 28px;
+                margin-bottom: 25px;
+                padding-bottom: 15px;
+                border-bottom: 3px solid #e2e8f0;
+              }
               .report-item { 
-                padding: 15px; 
-                margin: 10px 0; 
-                background: #f7fafc; 
-                border-radius: 10px; 
-                transition: all 0.3s;
+                padding: 20px;
+                margin: 15px 0;
+                background: #f7fafc;
+                border-radius: 12px;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                border-left: 4px solid #667eea;
               }
               .report-item:hover { 
-                background: #e2e8f0; 
-                transform: translateX(5px);
+                background: #edf2f7;
+                transform: translateX(8px);
+                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
               }
-              a { 
-                color: #667eea; 
-                text-decoration: none; 
-                font-weight: 600; 
+              .report-item a { 
+                color: #667eea;
+                text-decoration: none;
+                font-weight: 600;
+                font-size: 18px;
                 display: block;
+                margin-bottom: 8px;
               }
-              a:hover { color: #764ba2; }
-              .timestamp { 
-                color: #718096; 
-                font-size: 14px; 
-                margin-top: 5px; 
+              .report-item a:hover { color: #764ba2; }
+              .report-meta { 
+                color: #718096;
+                font-size: 14px;
+                display: flex;
+                gap: 20px;
+                flex-wrap: wrap;
               }
-              .no-reports {
+              .no-reports { 
                 text-align: center;
                 color: #718096;
-                padding: 40px;
+                padding: 60px 20px;
+              }
+              .badge { 
+                display: inline-block;
+                padding: 4px 12px;
+                background: #667eea;
+                color: white;
+                border-radius: 12px;
+                font-size: 12px;
+                font-weight: 600;
+                margin-left: 10px;
               }
             </style>
           </head>
           <body>
             <div class="container">
               <div class="header">
-                <h1>🎯 DAMS CBT Automation Reports</h1>
-                <p style="color: #718096; margin-top: 10px;">Comprehensive CBT Course Purchase Summary</p>
+                <h1>🎯 DAMS API Automation</h1>
+                <p>Test Reports & Screenshots Dashboard</p>
               </div>
-              <div class="report-list">
-                <h2>📊 Available Reports:</h2>
-          EOF
+              
+              <div class="section">
+                <h2>📊 Available Reports</h2>
+          HTMLEOF
           
           report_found=false
           
-          if ls ./reports/DAMS_CBT_Report_*.html 1> /dev/null 2>&1; then
-            for file in ./reports/DAMS_CBT_Report_*.html; do
+          if ls ./reports/DAMS_Report_*.html 1> /dev/null 2>&1; then
+            for file in ./reports/DAMS_Report_*.html; do
               if [ -f "$file" ]; then
                 basename=$(basename "$file")
                 filesize=$(du -h "$file" | cut -f1)
+                timestamp=$(echo "$basename" | grep -oP '\d{8}_\d{6}' || echo "Unknown")
                 
-                echo "<div class='report-item'>" >> ./reports/index.html
-                echo "  <a href='$basename'>📄 $basename</a>" >> ./reports/index.html
-                echo "  <div class='timestamp'>Size: $filesize</div>" >> ./reports/index.html
-                echo "</div>" >> ./reports/index.html
+                cat >> ./reports/index.html << ITEMEOF
+                <div class="report-item">
+                  <a href="$basename">📄 $basename</a>
+                  <div class="report-meta">
+                    <span>📅 $timestamp</span>
+                    <span>💾 $filesize</span>
+                    <span class="badge">Latest</span>
+                  </div>
+                </div>
+          ITEMEOF
                 
                 report_found=true
               fi
@@ -362,20 +454,22 @@ jobs:
           fi
           
           if [ "$report_found" = false ]; then
-            echo "<div class='no-reports'>" >> ./reports/index.html
-            echo "  <p>🔍 No reports available yet.</p>" >> ./reports/index.html
-            echo "  <p style='margin-top: 10px;'>Run the automation workflow to generate reports.</p>" >> ./reports/index.html
-            echo "</div>" >> ./reports/index.html
+            cat >> ./reports/index.html << 'NOFILEEOF'
+                <div class="no-reports">
+                  <p style="font-size: 18px; margin-bottom: 10px;">🔍 No reports available yet</p>
+                  <p>Run the automation workflow to generate test reports</p>
+                </div>
+          NOFILEEOF
           fi
           
-          cat >> ./reports/index.html << 'EOF'
+          cat >> ./reports/index.html << 'FOOTEREOF'
               </div>
             </div>
           </body>
           </html>
-          EOF
+          FOOTEREOF
           
-          echo "✓ Index page created"
+          echo "✅ Index page created"
           
       - name: 🚀 Upload Pages Artifact
         uses: actions/upload-pages-artifact@v3
