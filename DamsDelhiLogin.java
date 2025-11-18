@@ -17,7 +17,6 @@ import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
 
 public class DamsAutomationFull {
 
@@ -25,36 +24,15 @@ public class DamsAutomationFull {
     //                OKHTTP CLIENT SECTION
     // =======================================================
     private final OkHttpClient client = new OkHttpClient();
-    private static final String REPORT_DIR = "reports"; // Sabhi reports yahan save hongi
+    private static final String REPORT_DIR = "reports";
 
-    public String loginAndGetToken(String userId, String deviceToken) throws IOException {
-        // ... (Yeh function abhi bhi main mein use nahi ho raha hai, par ise chhod dete hain)
-        JSONObject bodyJson = new JSONObject();
-        bodyJson.put("user_id", userId);
-        bodyJson.put("device_token", deviceToken);
+    // ----------------------------------------------------------------
+    //     NEW FUNCTION → get_all_events API
+    // ----------------------------------------------------------------
+    public JSONArray getEvents(String jwtToken) throws IOException {
 
-        RequestBody body = RequestBody.create(
-                bodyJson.toString(),
-                MediaType.parse("application/json")
-        );
-
-        Request request = new Request.Builder()
-                .url("https://api.damsdelhi.com/v2_data_model/user_login_with_otp")
-                .post(body)
-                .addHeader("device_type", "3")
-                .addHeader("api_version", "10")
-                .build();
-
-        Response response = client.newCall(request).execute();
-        String resp = response.body().string();
-
-        JSONObject json = new JSONObject(resp);
-        return json.getString("authorization");
-    }
-
-    public JSONArray getPlans(String jwtToken) throws IOException {
         JSONObject reqBody = new JSONObject();
-        reqBody.put("category_id", "1");
+        reqBody.put("page", 1);
 
         RequestBody body = RequestBody.create(
                 reqBody.toString(),
@@ -62,12 +40,14 @@ public class DamsAutomationFull {
         );
 
         Request request = new Request.Builder()
-                .url("https://api.damsdelhi.com/v2_data_model/get_all_plan_by_category_id")
+                .url("https://api.damsdelhi.com/v2_data_model/get_all_events")
                 .post(body)
                 .addHeader("authorization", jwtToken)
                 .addHeader("device_type", "3")
                 .addHeader("api_version", "10")
                 .addHeader("user_id", "752847")
+                .addHeader("device_token", "25714535808")
+                .addHeader("device_info", "{\"browser\":\"Chrome 142\",\"os\":\"Windows 10\",\"deviceType\":\"browser\"}")
                 .build();
 
         Response response = client.newCall(request).execute();
@@ -77,37 +57,42 @@ public class DamsAutomationFull {
         return json.getJSONArray("data");
     }
 
-    public void generateHTML(JSONArray plans) throws IOException {
-        // Timestamp format badla gaya hai taaki file name mein ":" na aaye
-        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
-        String filename = "DAMS_CBT_Report_" + timestamp + ".html";
-        Path filepath = Paths.get(REPORT_DIR, filename);
+    // ----------------------------------------------------------------
+    //     NEW FUNCTION → HTML REPORT FOR EVENTS
+    // ----------------------------------------------------------------
+    public void generateEventsHTML(JSONArray events) throws IOException {
 
-        // Directory banayein agar nahi hai
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
+        String filename = "DAMS_Events_Report_" + timestamp + ".html";
+
+        Path filepath = Paths.get(REPORT_DIR, filename);
         Files.createDirectories(Paths.get(REPORT_DIR));
 
         FileWriter fw = new FileWriter(filepath.toFile());
 
-        fw.write("<html><head><title>DAMS Plan Report</title>");
-        fw.write("<style>body{font-family: Arial, sans-serif; margin: 20px;} table{border-collapse:collapse;width:80%;margin:auto;} td,th{border:1px solid #ddd;padding:12px;text-align:left;} th{background-color:#f2f2f2;} h2{text-align:center;}</style>");
+        fw.write("<html><head><title>DAMS Events Report</title>");
+        fw.write("<style>body{font-family: Arial, sans-serif; margin: 20px;} "
+                + "table{border-collapse:collapse;width:90%;margin:auto;} "
+                + "td,th{border:1px solid #ddd;padding:10px;text-align:left;} "
+                + "th{background-color:#f2f2f2;} h2{text-align:center;}</style>");
         fw.write("</head><body>");
 
-        fw.write("<h2>DAMS Plans Report</h2>");
-        fw.write("<table><tr><th>Plan Name</th><th>Price</th><th>Validity</th></tr>");
+        fw.write("<h2>DAMS Events List</h2>");
+        fw.write("<table><tr><th>Event Name</th><th>Date</th><th>Description</th></tr>");
 
-        for (int i = 0; i < plans.length(); i++) {
-            JSONObject p = plans.getJSONObject(i);
+        for (int i = 0; i < events.length(); i++) {
+            JSONObject e = events.getJSONObject(i);
             fw.write("<tr>");
-            fw.write("<td>" + p.getString("plan_name") + "</td>");
-            fw.write("<td>" + p.getString("plan_price") + "</td>");
-            fw.write("<td>" + p.getString("validity") + "</td>");
+            fw.write("<td>" + e.optString("event_name") + "</td>");
+            fw.write("<td>" + e.optString("event_date") + "</td>");
+            fw.write("<td>" + e.optString("event_description") + "</td>");
             fw.write("</tr>");
         }
 
         fw.write("</table></body></html>");
         fw.close();
 
-        System.out.println("📄 HTML Report Created: " + filepath.toAbsolutePath());
+        System.out.println("📄 HTML Events Report Created → " + filepath.toAbsolutePath());
     }
 
     // =======================================================
@@ -122,15 +107,14 @@ public class DamsAutomationFull {
     private String studentOtp = "2000";
 
     public void initBrowser() {
+
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--start-maximized");
         options.addArguments("--disable-blink-features=AutomationControlled");
-        
-        // CI/GitHub Actions ke liye zaroori options
-        options.addArguments("--headless"); // Headless mode mein run karega
-        options.addArguments("--no-sandbox"); // Sandbox disable karega
-        options.addArguments("--disable-dev-shm-usage"); // Shared memory issues fix karega
-        options.addArguments("--window-size=1920,1080"); // Window size set karega
+        options.addArguments("--headless");
+        options.addArguments("--no-sandbox");
+        options.addArguments("--disable-dev-shm-usage");
+        options.addArguments("--window-size=1920,1080");
 
         this.driver = new ChromeDriver(options);
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(15));
@@ -138,6 +122,7 @@ public class DamsAutomationFull {
     }
 
     public boolean loginToDamsSite() {
+
         try {
             System.out.println("🔐 Logging into damsdelhi.com ...");
             driver.get("https://www.damsdelhi.com/");
@@ -175,19 +160,18 @@ public class DamsAutomationFull {
 
         } catch (Exception e) {
             System.out.println("❌ Login failed: " + e.getMessage());
-            e.printStackTrace(); // Poora error print karega
-            takeScreenshot("DAMS_Login_Failed"); // Failure par bhi screenshot lega
+            takeScreenshot("DAMS_Login_Failed");
             return false;
         }
     }
 
     public String takeScreenshot(String baseFilename) {
+
         try {
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
             String filename = baseFilename + "_" + timestamp + ".png";
-            Path filepath = Paths.get(REPORT_DIR, filename);
 
-            // Directory banayein agar nahi hai
+            Path filepath = Paths.get(REPORT_DIR, filename);
             Files.createDirectories(Paths.get(REPORT_DIR));
 
             File source = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
@@ -226,43 +210,32 @@ public class DamsAutomationFull {
 
         if (!loginWeb) {
             System.out.println("❌ Cannot continue. Login Failed.");
-            full.takeScreenshot("DAMS_Login_Failure"); // Screenshot lein failure par
+            full.takeScreenshot("DAMS_Login_Failure");
             full.closeBrowser();
             return;
         }
-        
-        // Login successful hone par screenshot
+
         full.takeScreenshot("DAMS_Login_Success");
 
-        // 3️⃣ API CALL – Fetch Plans Report
-        System.out.println("📡 Fetching plans using OkHttp API...");
+        // 3️⃣ API CALL – Fetch Events
+        System.out.println("📡 Fetching events using OkHttp API...");
 
-        // === YEH SABSE ZAROORI BADLAAV HAI ===
-        // Token ko hardcode karne ke bajaaye Environment Variable se padhein
         String hardToken = System.getenv("DAMS_JWT_TOKEN");
 
-        if (hardToken == null || hardToken.equals("PUT-YOUR-JWT-TOKEN-HERE") || hardToken.isEmpty()) {
-            System.out.println("❌ Error: DAMS_JWT_TOKEN environment variable not set.");
-            System.out.println("   Please set this as a GitHub Secret in your repository.");
+        if (hardToken == null || hardToken.isEmpty()) {
+            System.out.println("❌ Error: DAMS_JWT_TOKEN environment variable missing.");
             full.closeBrowser();
             return;
-        } else {
-             System.out.println("Token found successfully.");
         }
 
         try {
-            JSONArray plans = full.getPlans(hardToken);
-            full.generateHTML(plans); // Report generate karega ./reports/ folder mein
+            JSONArray events = full.getEvents(hardToken);
+            full.generateEventsHTML(events);
+
         } catch (Exception e) {
-            System.out.println("❌ Failed to get plans or generate report: " + e.getMessage());
-            e.printStackTrace();
+            System.out.println("❌ Failed to fetch or generate event report: " + e.getMessage());
         }
 
-        // 4️⃣ FINAL SCREENSHOT (Optional, kyunki success par pehle hi le liya hai)
-        // String screen = full.takeScreenshot("DAMS_Final_Capture");
-        // System.out.println("📸 Final Screenshot Saved: " + screen);
-
-        // 5️⃣ CLOSE BROWSER
         full.closeBrowser();
 
         System.out.println("\n🎉 FULL AUTOMATION COMPLETED SUCCESSFULLY!");
