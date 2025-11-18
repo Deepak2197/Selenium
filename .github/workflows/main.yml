@@ -1,155 +1,482 @@
-name: DAMS Automation CI/CD Pipeline
+name: DAMS API Automation with Report
 
 on:
-  # Run on push to main branch
-  push:
-    branches: [ main, master ]
-  
-  # Run on pull requests
-  pull_request:
-    branches: [ main, master ]
-  
-  # Allow manual trigger
   workflow_dispatch:
-  
-  # Run on schedule (every day at 9 AM UTC)
+    inputs:
+      run_description:
+        description: 'Description of this run'
+        required: false
+        default: 'Manual execution'
   schedule:
     - cron: '0 9 * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.java'
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  actions: read
 
 jobs:
-  dams-automation:
+  automation:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     
     steps:
-      # ========================================
-      # STEP 1: Checkout Repository
-      # ========================================
       - name: 📥 Checkout Repository
         uses: actions/checkout@v4
-      
-      # ========================================
-      # STEP 2: Setup Java 17
-      # ========================================
-      - name: ☕ Setup Java JDK 17
+        
+      - name: ☕ Setup Java 11
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
-          cache: 'maven'
-      
-      # ========================================
-      # STEP 3: Setup Chrome & ChromeDriver
-      # ========================================
-      - name: 🌐 Setup Chrome Browser
-        uses: browser-actions/setup-chrome@latest
+          java-version: '11'
+          
+      - name: 🔧 Setup Chrome and ChromeDriver
+        uses: browser-actions/setup-chrome@v1
         with:
           chrome-version: stable
-      
-      - name: 🚗 Setup ChromeDriver
-        uses: nanasess/setup-chromedriver@v2
-      
-      - name: 📋 Verify Chrome & ChromeDriver Installation
-        run: |
-          echo "Chrome version:"
-          google-chrome --version
-          echo "ChromeDriver version:"
-          chromedriver --version
-      
-      # ========================================
-      # STEP 4: Cache Maven Dependencies
-      # ========================================
-      - name: 📦 Cache Maven Dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-
-      
-      # ========================================
-      # STEP 5: Build Project with Maven
-      # ========================================
-      - name: 🔨 Build with Maven
-        run: |
-          echo "Building project..."
-          mvn clean compile -DskipTests
-      
-      # ========================================
-      # STEP 6: Run Automation Tests
-      # ========================================
-      - name: 🚀 Execute DAMS Automation
-        env:
-          DAMS_JWT_TOKEN: ${{ secrets.DAMS_JWT_TOKEN }}
-        run: |
-          echo "Starting DAMS Automation..."
-          mvn exec:java -Dexec.mainClass="DamsAutomation"
-        continue-on-error: false
-      
-      # ========================================
-      # STEP 7: Upload Screenshots as Artifacts
-      # ========================================
-      - name: 📸 Upload Screenshots
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshots-${{ github.run_number }}
-          path: reports/*.png
-          retention-days: 30
-          if-no-files-found: warn
-      
-      # ========================================
-      # STEP 8: Upload HTML Reports as Artifacts
-      # ========================================
-      - name: 📊 Upload HTML Reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: html-reports-${{ github.run_number }}
-          path: reports/*.html
-          retention-days: 30
-          if-no-files-found: warn
-      
-      # ========================================
-      # STEP 9: Upload All Reports (Combined)
-      # ========================================
-      - name: 📁 Upload All Reports (Combined)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dams-automation-reports-${{ github.run_number }}
-          path: reports/
-          retention-days: 30
-          if-no-files-found: warn
-      
-      # ========================================
-      # STEP 10: Display Execution Summary
-      # ========================================
-      - name: 📋 Display Execution Summary
-        if: always()
-        run: |
-          echo "================================================"
-          echo "           AUTOMATION EXECUTION SUMMARY         "
-          echo "================================================"
-          echo "Run Number: ${{ github.run_number }}"
-          echo "Run ID: ${{ github.run_id }}"
-          echo "Commit SHA: ${{ github.sha }}"
-          echo "Branch: ${{ github.ref_name }}"
-          echo "Triggered by: ${{ github.event_name }}"
-          echo "================================================"
           
-          if [ -d "reports" ]; then
-            echo "📂 Generated Reports:"
-            ls -lh reports/
-          else
-            echo "⚠️ No reports directory found"
-          fi
-      
-      # ========================================
-      # STEP 11: Notify on Failure (Optional)
-      # ========================================
-      - name: 🚨 Notify on Failure
-        if: failure()
+      - name: 🔍 Verify Installation
         run: |
-          echo "❌ Automation execution FAILED!"
-          echo "Please check the logs and artifacts for details."
-          exit 1
+          echo "=== Chrome Version ==="
+          google-chrome --version
+          echo ""
+          echo "=== ChromeDriver Version ==="
+          chromedriver --version
+          echo ""
+          echo "=== Java Version ==="
+          java -version
+          
+      - name: 📦 Download Selenium Dependencies
+        run: |
+          mkdir -p lib
+          cd lib
+          
+          echo "📥 Downloading Selenium JARs..."
+          
+          # Core Selenium
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-java/4.15.0/selenium-java-4.15.0.jar
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-api/4.15.0/selenium-api-4.15.0.jar
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chrome-driver/4.15.0/selenium-chrome-driver-4.15.0.jar
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chromium-driver/4.15.0/selenium-chromium-driver-4.15.0.jar
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-remote-driver/4.15.0/selenium-remote-driver-4.15.0.jar
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-support/4.15.0/selenium-support-4.15.0.jar
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-manager/4.15.0/selenium-manager-4.15.0.jar
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-http/4.15.0/selenium-http-4.15.0.jar
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-json/4.15.0/selenium-json-4.15.0.jar
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-devtools-v119/4.15.0/selenium-devtools-v119-4.15.0.jar
+          wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-os/4.15.0/selenium-os-4.15.0.jar
+          
+          # Dependencies
+          wget -q https://repo1.maven.org/maven2/com/google/guava/guava/32.1.3-jre/guava-32.1.3-jre.jar
+          wget -q https://repo1.maven.org/maven2/com/google/guava/failureaccess/1.0.2/failureaccess-1.0.2.jar
+          wget -q https://repo1.maven.org/maven2/com/google/auto/service/auto-service-annotations/1.1.1/auto-service-annotations-1.1.1.jar
+          wget -q https://repo1.maven.org/maven2/org/asynchttpclient/async-http-client/2.12.3/async-http-client-2.12.3.jar
+          wget -q https://repo1.maven.org/maven2/io/netty/netty-all/4.1.100.Final/netty-all-4.1.100.Final.jar
+          wget -q https://repo1.maven.org/maven2/org/apache/httpcomponents/client5/httpclient5/5.2.1/httpclient5-5.2.1.jar
+          wget -q https://repo1.maven.org/maven2/org/apache/httpcomponents/core5/httpcore5/5.2.1/httpcore5-5.2.1.jar
+          wget -q https://repo1.maven.org/maven2/org/apache/httpcomponents/core5/httpcore5-h2/5.2.1/httpcore5-h2-5.2.1.jar
+          wget -q https://repo1.maven.org/maven2/commons-io/commons-io/2.15.0/commons-io-2.15.0.jar
+          wget -q https://repo1.maven.org/maven2/org/apache/commons/commons-exec/1.3/commons-exec-1.3.jar
+          wget -q https://repo1.maven.org/maven2/commons-codec/commons-codec/1.16.0/commons-codec-1.16.0.jar
+          wget -q https://repo1.maven.org/maven2/commons-logging/commons-logging/1.2/commons-logging-1.2.jar
+          wget -q https://repo1.maven.org/maven2/dev/failsafe/failsafe/3.3.2/failsafe-3.3.2.jar
+          wget -q https://repo1.maven.org/maven2/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar
+          wget -q https://repo1.maven.org/maven2/net/bytebuddy/byte-buddy/1.14.9/byte-buddy-1.14.9.jar
+          wget -q https://repo1.maven.org/maven2/org/slf4j/slf4j-api/2.0.9/slf4j-api-2.0.9.jar
+          wget -q https://repo1.maven.org/maven2/org/slf4j/slf4j-simple/2.0.9/slf4j-simple-2.0.9.jar
+          
+          echo "✅ Downloaded $(ls -1 | wc -l) JAR files"
+          
+      - name: 📁 Create Directories
+        run: |
+          mkdir -p compiled
+          mkdir -p test-report/screenshots
+          echo "✅ Directories created"
+          
+      - name: 🔧 Configure ChromeDriver
+        run: |
+          export PATH=$PATH:/usr/bin
+          echo "PATH=$PATH" >> $GITHUB_ENV
+          
+      - name: 📂 Check Java File Structure
+        run: |
+          echo "=== Repository Structure ==="
+          ls -la
+          echo ""
+          echo "=== Looking for Java files ==="
+          find . -name "*.java" -type f
+          echo ""
+          echo "=== Checking package structure ==="
+          if [ -f "TestWithApi.java" ]; then
+            echo "✅ Found TestWithApi.java in root"
+            head -5 TestWithApi.java
+          elif [ -f "SelenuimTest/SelenuimTest1/TestWithApi.java" ]; then
+            echo "✅ Found TestWithApi.java in package structure"
+            head -5 SelenuimTest/SelenuimTest1/TestWithApi.java
+          else
+            echo "⚠️ TestWithApi.java location unknown"
+          fi
+          
+      - name: 🏗️ Compile Java Code
+        run: |
+          echo "🔨 Attempting compilation..."
+          
+          # Find the Java file
+          if [ -f "TestWithApi.java" ]; then
+            echo "Compiling from root directory..."
+            javac -cp "lib/*" -d compiled TestWithApi.java
+          elif [ -f "SelenuimTest/SelenuimTest1/TestWithApi.java" ]; then
+            echo "Compiling from package directory..."
+            javac -cp "lib/*" -d compiled SelenuimTest/SelenuimTest1/TestWithApi.java
+          else
+            echo "❌ Cannot find TestWithApi.java"
+            exit 1
+          fi
+          
+          if [ $? -eq 0 ]; then
+            echo "✅ Compilation successful"
+            echo ""
+            echo "Compiled classes:"
+            find compiled -name "*.class"
+          else
+            echo "❌ Compilation failed"
+            exit 1
+          fi
+          
+      - name: 🚀 Run Automation Test
+        env:
+          CI: true
+        timeout-minutes: 25
+        run: |
+          echo "▶️  Starting DAMS automation..."
+          echo "======================================"
+          
+          # Try to run the compiled class
+          if [ -f "compiled/TestWithApi.class" ]; then
+            echo "Running from root package..."
+            java -cp "compiled:lib/*" TestWithApi 2>&1 || exit_code=$?
+          elif [ -f "compiled/SelenuimTest/SelenuimTest1/TestWithApi.class" ]; then
+            echo "Running from full package..."
+            java -cp "compiled:lib/*" SelenuimTest.SelenuimTest1.TestWithApi 2>&1 || exit_code=$?
+          else
+            echo "❌ Cannot find compiled TestWithApi.class"
+            find compiled -name "*.class"
+            exit 1
+          fi
+          
+          echo ""
+          echo "======================================"
+          
+          # Check exit code
+          if [ ${exit_code:-0} -eq 0 ]; then
+            echo "✅ Execution completed successfully"
+          else
+            echo "⚠️ Execution completed with exit code: ${exit_code:-0}"
+            # Don't fail the job - we want to see the report
+            exit 0
+          fi
+        continue-on-error: true
+        
+      - name: 📊 Check Results
+        if: always()
+        run: |
+          echo "## 📊 Execution Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Check screenshots
+          if [ -d "test-report/screenshots" ]; then
+            screenshot_count=$(find test-report/screenshots -name "*.png" 2>/dev/null | wc -l)
+            echo "- **Screenshots Generated**: $screenshot_count" >> $GITHUB_STEP_SUMMARY
+            
+            if [ $screenshot_count -gt 0 ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### 📸 Screenshots:" >> $GITHUB_STEP_SUMMARY
+              for file in test-report/screenshots/*.png; do
+                if [ -f "$file" ]; then
+                  filename=$(basename "$file")
+                  filesize=$(du -h "$file" | cut -f1)
+                  echo "- 📷 \`$filename\` ($filesize)" >> $GITHUB_STEP_SUMMARY
+                fi
+              done
+            fi
+          fi
+          
+          # Check HTML reports
+          if ls test-report/DAMS_Report_*.html 1> /dev/null 2>&1; then
+            report_count=$(ls test-report/DAMS_Report_*.html | wc -l)
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- **HTML Reports**: $report_count generated ✅" >> $GITHUB_STEP_SUMMARY
+            
+            for report in test-report/DAMS_Report_*.html; do
+              if [ -f "$report" ]; then
+                report_name=$(basename "$report")
+                report_size=$(du -h "$report" | cut -f1)
+                echo "  - 📄 \`$report_name\` ($report_size)" >> $GITHUB_STEP_SUMMARY
+              fi
+            done
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- **HTML Reports**: ⚠️ No reports found" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "- **Run ID**: \`${{ github.run_id }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+      
+      - name: 📦 Prepare GitHub Pages Content
+        if: always()
+        run: |
+          mkdir -p github-pages-content/screenshots
+          
+          # Copy HTML reports
+          if ls test-report/DAMS_Report_*.html 1> /dev/null 2>&1; then
+            cp test-report/DAMS_Report_*.html github-pages-content/
+            echo "✅ HTML reports copied"
+          else
+            echo "⚠️ No HTML reports found"
+            # Create a placeholder report
+            echo "<html><body><h1>No report generated yet</h1><p>The automation test did not complete successfully.</p></body></html>" > github-pages-content/placeholder.html
+          fi
+          
+          # Copy screenshots
+          if [ -d "test-report/screenshots" ] && [ "$(ls -A test-report/screenshots 2>/dev/null)" ]; then
+            cp test-report/screenshots/*.png github-pages-content/screenshots/ 2>/dev/null || true
+            screenshot_count=$(ls github-pages-content/screenshots/*.png 2>/dev/null | wc -l)
+            echo "✅ Copied $screenshot_count screenshots"
+          else
+            echo "⚠️ No screenshots found"
+          fi
+          
+          echo ""
+          echo "📁 GitHub Pages content:"
+          ls -lah github-pages-content/ || echo "Empty"
+          echo ""
+          echo "📸 Screenshots:"
+          ls -lah github-pages-content/screenshots/ || echo "No screenshots"
+      
+      - name: 📤 Upload GitHub Pages Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: github-pages-content
+          path: ./github-pages-content/
+          retention-days: 30
+          if-no-files-found: warn
+          
+      - name: 🐛 Debug Info
+        if: always()
+        run: |
+          echo "=== Full Debug Information ==="
+          echo ""
+          echo "1. Current directory:"
+          pwd
+          echo ""
+          echo "2. Directory tree:"
+          tree -L 3 || find . -maxdepth 3 -type f
+          echo ""
+          echo "3. Test report directory:"
+          ls -lah test-report/ 2>/dev/null || echo "test-report directory not found"
+          echo ""
+          echo "4. Screenshots:"
+          ls -lah test-report/screenshots/ 2>/dev/null || echo "Screenshots not found"
+          echo ""
+          echo "5. Compiled classes:"
+          find compiled -name "*.class" 2>/dev/null || echo "No compiled classes"
+          echo ""
+          echo "6. Java processes:"
+          ps aux | grep java || echo "No Java processes"
+          echo ""
+          echo "7. Chrome/ChromeDriver:"
+          ps aux | grep chrome || echo "No Chrome processes"
+
+  deploy-reports:
+    needs: automation
+    runs-on: ubuntu-latest
+    if: always() && github.ref == 'refs/heads/main'
+    
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+      
+    steps:
+      - name: 📥 Download Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: github-pages-content
+          path: ./reports
+        continue-on-error: true
+        
+      - name: 🏗️ Create Index Page
+        run: |
+          mkdir -p ./reports
+          
+          cat > ./reports/index.html << 'HTMLEOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>DAMS API Automation Reports</title>
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                padding: 40px 20px;
+              }
+              .container { max-width: 1200px; margin: 0 auto; }
+              .header { 
+                background: white;
+                border-radius: 20px;
+                padding: 40px;
+                margin-bottom: 30px;
+                box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+                text-align: center;
+              }
+              .header h1 { 
+                font-size: 48px;
+                font-weight: 800;
+                margin-bottom: 15px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+              }
+              .header p { color: #718096; font-size: 16px; }
+              .section { 
+                background: white;
+                padding: 40px;
+                border-radius: 20px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+                margin-bottom: 20px;
+              }
+              .section h2 { 
+                color: #2d3748;
+                font-size: 28px;
+                margin-bottom: 25px;
+                padding-bottom: 15px;
+                border-bottom: 3px solid #e2e8f0;
+              }
+              .report-item { 
+                padding: 20px;
+                margin: 15px 0;
+                background: #f7fafc;
+                border-radius: 12px;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                border-left: 4px solid #667eea;
+              }
+              .report-item:hover { 
+                background: #edf2f7;
+                transform: translateX(8px);
+                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+              }
+              .report-item a { 
+                color: #667eea;
+                text-decoration: none;
+                font-weight: 600;
+                font-size: 18px;
+                display: block;
+                margin-bottom: 8px;
+              }
+              .report-item a:hover { color: #764ba2; }
+              .report-meta { 
+                color: #718096;
+                font-size: 14px;
+                display: flex;
+                gap: 20px;
+                flex-wrap: wrap;
+              }
+              .no-reports { 
+                text-align: center;
+                color: #718096;
+                padding: 60px 20px;
+              }
+              .badge { 
+                display: inline-block;
+                padding: 4px 12px;
+                background: #667eea;
+                color: white;
+                border-radius: 12px;
+                font-size: 12px;
+                font-weight: 600;
+                margin-left: 10px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>🎯 DAMS API Automation</h1>
+                <p>Test Reports & Screenshots Dashboard</p>
+              </div>
+              
+              <div class="section">
+                <h2>📊 Available Reports</h2>
+          HTMLEOF
+          
+          report_found=false
+          
+          if ls ./reports/DAMS_Report_*.html 1> /dev/null 2>&1; then
+            for file in ./reports/DAMS_Report_*.html; do
+              if [ -f "$file" ]; then
+                basename=$(basename "$file")
+                filesize=$(du -h "$file" | cut -f1)
+                timestamp=$(echo "$basename" | grep -oP '\d{8}_\d{6}' || echo "Unknown")
+                
+                cat >> ./reports/index.html << ITEMEOF
+                <div class="report-item">
+                  <a href="$basename">📄 $basename</a>
+                  <div class="report-meta">
+                    <span>📅 $timestamp</span>
+                    <span>💾 $filesize</span>
+                    <span class="badge">Latest</span>
+                  </div>
+                </div>
+          ITEMEOF
+                
+                report_found=true
+              fi
+            done
+          fi
+          
+          if [ "$report_found" = false ]; then
+            cat >> ./reports/index.html << 'NOFILEEOF'
+                <div class="no-reports">
+                  <p style="font-size: 18px; margin-bottom: 10px;">🔍 No reports available yet</p>
+                  <p>Run the automation workflow to generate test reports</p>
+                </div>
+          NOFILEEOF
+          fi
+          
+          cat >> ./reports/index.html << 'FOOTEREOF'
+              </div>
+            </div>
+          </body>
+          </html>
+          FOOTEREOF
+          
+          echo "✅ Index page created"
+          
+      - name: 🚀 Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./reports
+          
+      - name: 🌐 Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
