@@ -1,329 +1,574 @@
-import okhttp3.*;
-import org.json.JSONArray;
-import org.json.JSONObject;
+// IMPORTANT: Save this file as TestWithApi.java in the ROOT of your repository
+// DO NOT use package declaration for GitHub Actions compatibility
+
+import java.io.*;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter; 
+import java.util.*;
+import java.util.regex.*;
 import org.openqa.selenium.*;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
-import org.openqa.selenium.support.ui.ExpectedConditions;
-import org.openqa.selenium.support.ui.WebDriverWait;
+import org.openqa.selenium.support.ui.*;
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.TakesScreenshot;
+import org.openqa.selenium.io.FileHandler;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.Base64;
+import java.util.concurrent.TimeUnit;
+import java.time.ZoneId;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
+public class TestWithApi {
 
-public class DamsAutomationFull {
+    private static WebDriver driver;
+    private static WebDriverWait wait;
+    private static List<String> reportLogs = new ArrayList<>();
+    private static String screenshotDir = System.getProperty("user.dir") + "/test-report/screenshots/";
+    private static String reportDir = System.getProperty("user.dir") + "/test-report/";
 
-    // =======================================================
-    //                OKHTTP CLIENT SECTION
-    // =======================================================
-    private final OkHttpClient client = new OkHttpClient();
-    private static final String REPORT_DIR = "reports"; // Sabhi reports yahan save hongi
+    // Constants
+    private static final String DEVICE_TOKEN_FALLBACK = "61797743405"; 
+    private static final String DEVICE_TYPE = "3";
+    private static final String API_URL = "https://api.damsdelhi.com/v2_data_model/get_all_plan_by_category_id";
+    private static final String USER_ID_OVERRIDE = "161444";
+    private static final String DEVICE_TOKEN_OVERRIDE = "61797743405";
+    private static final String STREAM_ID = "1";
+    private static final String API_VERSION = "25";
+    private static final String DEVICE_INFO_MOCK = "{\"model\":\"chrome_driver\",\"os\":\"linux\",\"app\":\"dams\"}";
 
-    public String loginAndGetToken(String userId, String deviceToken) throws IOException {
-        // ... (Yeh function abhi bhi main mein use nahi ho raha hai, par ise chhod dete hain)
-        JSONObject bodyJson = new JSONObject();
-        bodyJson.put("user_id", userId);
-        bodyJson.put("device_token", deviceToken);
-
-        RequestBody body = RequestBody.create(
-                bodyJson.toString(),
-                MediaType.parse("application/json")
-        );
-
-        Request request = new Request.Builder()
-                .url("https://api.damsdelhi.com/v2_data_model/user_login_with_otp")
-                .post(body)
-                .addHeader("device_type", "3")
-                .addHeader("api_version", "10")
-                .build();
-
-        Response response = client.newCall(request).execute();
-        String resp = response.body().string();
-
-        JSONObject json = new JSONObject(resp);
-        return json.getString("authorization");
-    }
-
-    public JSONArray getPlans(String jwtToken) throws IOException {
-        JSONObject reqBody = new JSONObject();
-        reqBody.put("category_id", "1");
-
-        RequestBody body = RequestBody.create(
-                reqBody.toString(),
-                MediaType.parse("application/json")
-        );
-
-        Request request = new Request.Builder()
-                .url("https://api.damsdelhi.com/v2_data_model/get_all_plan_by_category_id")
-                .post(body)
-                .addHeader("authorization", jwtToken)
-                .addHeader("device_type", "3")
-                .addHeader("api_version", "10")
-                .addHeader("user_id", "752847")
-                .build();
-
-        Response response = client.newCall(request).execute();
-        String resp = response.body().string();
-
-        JSONObject json = new JSONObject(resp);
-        return json.getJSONArray("data");
-    }
-
-    public void generateHTML(JSONArray plans) throws IOException {
-        // Timestamp format badla gaya hai taaki file name mein ":" na aaye
-        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss"));
-        String filename = "DAMS_CBT_Report_" + timestamp + ".html";
-        Path filepath = Paths.get(REPORT_DIR, filename);
-
-        // Directory banayein agar nahi hai
-        Files.createDirectories(Paths.get(REPORT_DIR));
-
-        FileWriter fw = new FileWriter(filepath.toFile());
-
-        fw.write("<html><head><title>DAMS Plan Report</title>");
-        fw.write("<style>body{font-family: Arial, sans-serif; margin: 20px;} table{border-collapse:collapse;width:80%;margin:auto;} td,th{border:1px solid #ddd;padding:12px;text-align:left;} th{background-color:#f2f2f2;} h2{text-align:center;}</style>");
-        fw.write("</head><body>");
-
-        fw.write("<h2>DAMS Plans Report</h2>");
-        fw.write("<table><tr><th>Plan Name</th><th>Price</th><th>Validity</th></tr>");
-
-        for (int i = 0; i < plans.length(); i++) {
-            JSONObject p = plans.getJSONObject(i);
-            fw.write("<tr>");
-            fw.write("<td>" + p.getString("plan_name") + "</td>");
-            fw.write("<td>" + p.getString("plan_price") + "</td>");
-            fw.write("<td>" + p.getString("validity") + "</td>");
-            fw.write("</tr>");
-        }
-
-        fw.write("</table></body></html>");
-        fw.close();
-
-        System.out.println("📄 HTML Report Created: " + filepath.toAbsolutePath());
-    }
-
-    // =======================================================
-    //                   SELENIUM SECTION
-    // =======================================================
-
-    private WebDriver driver;
-    private WebDriverWait wait;
-    private WebDriverWait longWait;
-
-    private String studentPhone = "+919456628016";
-    private String studentOtp = "2000";
-
-    public void initBrowser() {
-        ChromeOptions options = new ChromeOptions();
-        options.addArguments("--start-maximized");
-        options.addArguments("--disable-blink-features=AutomationControlled");
+    public static void main(String[] args) {
+        log("🚀 DAMS Automation Started");
+        log("Environment: " + (System.getenv("CI") != null ? "GitHub Actions (CI)" : "Local"));
         
-        // CI/GitHub Actions ke liye zaroori options
-        options.addArguments("--headless"); // Headless mode mein run karega
-        options.addArguments("--no-sandbox"); // Sandbox disable karega
-        options.addArguments("--disable-dev-shm-usage"); // Shared memory issues fix karega
-        options.addArguments("--window-size=1920,1080"); // Window size set karega
-
-        this.driver = new ChromeDriver(options);
-        this.wait = new WebDriverWait(driver, Duration.ofSeconds(15));
-        this.longWait = new WebDriverWait(driver, Duration.ofSeconds(30));
-    }
-
-    public boolean loginToDamsSite() {
         try {
-            System.out.println("🔐 Logging into damsdelhi.com ...");
+            // Setup Chrome Options
+            ChromeOptions options = new ChromeOptions();
+            
+            String ciEnv = System.getenv("CI");
+            if ("true".equals(ciEnv)) {
+                log("🔧 Configuring for CI environment (headless mode)");
+                options.addArguments("--headless=new");
+                options.addArguments("--no-sandbox");
+                options.addArguments("--disable-dev-shm-usage");
+                options.addArguments("--disable-gpu");
+                options.addArguments("--window-size=1920,1080");
+                options.addArguments("--disable-extensions");
+                options.addArguments("--disable-software-rasterizer");
+                options.addArguments("--disable-blink-features=AutomationControlled");
+                options.addArguments("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            } else {
+                log("🔧 Configuring for local environment");
+            }
+            
+            options.addArguments("--remote-allow-origins=*");
+            options.addArguments("--disable-notifications");
+            options.addArguments("--ignore-certificate-errors");
+            
+            log("🌐 Initializing Chrome WebDriver...");
+            driver = new ChromeDriver(options);
+            driver.manage().window().maximize();
+            driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(15));
+            driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(60));
+            wait = new WebDriverWait(driver, Duration.ofSeconds(30));
+            log("✅ WebDriver initialized successfully");
+
+            // --- STEP 1: Navigation and Login ---
+            log("📍 STEP 1: Navigating to DAMS website");
             driver.get("https://www.damsdelhi.com/");
-            Thread.sleep(3000);
+            waitFor(3);
+            log("✅ Page loaded: " + driver.getCurrentUrl());
 
-            WebElement signinBtn = wait.until(
-                    ExpectedConditions.elementToBeClickable(
-                            By.xpath("//a[contains(text(),'Sign in') or contains(text(),'Sign In')]")
-                    )
-            );
+            log("🔐 STEP 2: Starting login process");
+            clickElement(By.className("loginbtnSignupbtn"), "Login/Signup button");
+            
+            WebElement phoneInput = wait.until(ExpectedConditions.elementToBeClickable(
+                By.cssSelector(".react-international-phone-input")));
+            phoneInput.clear();
+            phoneInput.sendKeys("7897897897");
+            
+            clickElement(By.className("common-bottom-btn"), "Mobile submit button");
+            log("✅ Mobile number entered");
 
-            signinBtn.click();
-            Thread.sleep(2000);
+            waitFor(4); 
 
-            WebElement phoneField = wait.until(
-                    ExpectedConditions.elementToBeClickable(By.xpath("//input[@type='tel']"))
-            );
-            phoneField.sendKeys(studentPhone);
+            clickElement(By.xpath("//button[contains(@class, 'btndata') and normalize-space(text())='Logout & Continue']"),
+                    "Logout & Continue button");
 
-            WebElement submitBtn = wait.until(ExpectedConditions.elementToBeClickable(By.className("common-bottom-btn")));
-            submitBtn.click();
-            Thread.sleep(3000);
+            // Enter PIN
+            log("🔢 Entering PIN...");
+            String[] pinDigits = {"2", "0", "0", "0"};
+            wait.until(ExpectedConditions.visibilityOfElementLocated(By.cssSelector("input.otp-field")));
+            List<WebElement> pinFields = driver.findElements(By.cssSelector("input.otp-field"));
+            for (int i = 0; i < pinFields.size() && i < pinDigits.length; i++) {
+                WebElement field = pinFields.get(i);
+                wait.until(ExpectedConditions.elementToBeClickable(field));
+                field.clear();
+                field.sendKeys(pinDigits[i]);
+                Thread.sleep(300);
+            }
+            log("✅ PIN entered");
 
-            WebElement otpField = wait.until(
-                    ExpectedConditions.elementToBeClickable(By.xpath("//input"))
-            );
-            otpField.sendKeys(studentOtp);
+            clickElement(By.xpath("//button[contains(@class, 'common-bottom-btn') and normalize-space(text())='Verify & Proceed']"),
+                    "Verify & Proceed button");
+            log("✅ Login successful");
+            
+            waitFor(3);
 
-            WebElement otpSubmit = wait.until(ExpectedConditions.elementToBeClickable(By.className("common-bottom-btn")));
-            otpSubmit.click();
-            Thread.sleep(5000);
+            // --- STEP 3: Navigate to Course Selection ---
+            log("📚 STEP 3: Selecting course category");
+            WebElement categoryButton = wait.until(ExpectedConditions.elementToBeClickable(
+                By.xpath("//button[normalize-space()='NEET PG NEXT']")));
+            categoryButton.click();
+            log("✅ Clicked NEET PG NEXT");
 
-            System.out.println("🎉 Login Successful!");
-            return true;
+            waitFor(2);
+
+            String labelText = "NURSING (DSSSB, SGPGI, ESIC, RBB, KGMU)";
+            WebElement radioLabel = wait.until(ExpectedConditions.elementToBeClickable(
+                By.xpath("//span[text()='" + labelText + "']/parent::label")));
+            radioLabel.click();
+            log("✅ Selected: " + labelText);
+
+            waitFor(2);
+
+            // --- STEP 4: Plan Selection ---
+            log("💳 STEP 4: Selecting plan");
+            By goProButton = By.xpath("//button[contains(., 'Premium') and contains(., 'Go Pro')]");
+            clickElementJS(goProButton, "Go Pro button");
+            
+            waitFor(2);
+            
+            By buyNowButton = By.xpath("//button[contains(@class, 'plan-actions')]//h5[contains(text(), 'Buy Now')]");
+            clickElementJS(buyNowButton, "Buy Now button");
+
+            waitFor(2);
+            
+            By planButton = By.xpath("//button[contains(@class, 'boxrate')]//h3[normalize-space(text())='3 Months']/parent::button");
+            clickElementJS(planButton, "3 Months plan");
+
+            waitFor(2);
+            
+            By placeOrderButton = By.xpath("//button[contains(@class,'btn-danger')]//h6[contains(normalize-space(.), 'Place Order')]");
+            clickElementJS(placeOrderButton, "Place Order button");
+            log("✅ Order placed");
+
+            waitFor(3);
+            
+            // --- STEP 5: Payment Method ---
+            log("💰 STEP 5: Selecting payment method");
+            By paytmRadioLocator = By.xpath("//label[.//span[normalize-space(text())='Paytm']]");
+            clickElement(paytmRadioLocator, "Paytm option");
+
+            waitFor(2);
+            
+            By payNowLocator = By.xpath("//button[.//span[normalize-space(text())='Pay Now']]");
+            clickElement(payNowLocator, "Pay Now button");
+            log("✅ Proceeding to payment");
+
+            // --- STEP 6: Capture Data ---
+            log("📸 STEP 6: Capturing screenshot and extracting data");
+            waitFor(6);
+            
+            String screenshotPath = takeScreenshot("PaymentConfirmation");
+            if (screenshotPath != null) {
+                log("✅ Screenshot saved: " + new File(screenshotPath).getName());
+            }
+
+            Map<String, String> authHeaders = extractAuthFromStorage();
+            log("🔐 Authentication data extracted");
+
+            // --- STEP 7: API Call ---
+            log("🌐 STEP 7: Calling API");
+            String apiResponse = callPlanAPI(authHeaders);
+            
+            if (apiResponse.contains("\"status\":true")) {
+                log("✅ API call successful");
+                int planCount = countOccurrences(apiResponse, "\"id\":");
+                log("📊 Plans retrieved: " + planCount);
+            } else {
+                log("⚠️ API response indicates an issue");
+            }
+
+            // --- STEP 8: Generate Report ---
+            log("📝 STEP 8: Generating HTML report");
+            generateHTMLReport(apiResponse);
+            log("✅ Report generated successfully");
 
         } catch (Exception e) {
-            System.out.println("❌ Login failed: " + e.getMessage());
-            e.printStackTrace(); // Poora error print karega
-            takeScreenshot("DAMS_Login_Failed"); // Failure par bhi screenshot lega
-            return false;
+            log("❌ FATAL ERROR: " + e.getMessage());
+            e.printStackTrace();
+            takeScreenshot("FatalError");
+            
+            try {
+                generateHTMLReport("{\"status\":false,\"message\":\"Fatal error: " + 
+                    e.getMessage().replaceAll("\"", "'") + "\"}");
+            } catch (Exception reportError) {
+                System.err.println("Could not generate error report: " + reportError.getMessage());
+            }
+        } finally {
+            if (driver != null) {
+                try {
+                    String keepBrowserOpen = System.getenv("KEEP_BROWSER_OPEN");
+                    if (!"true".equals(keepBrowserOpen)) {
+                        driver.quit();
+                        log("🔒 Browser closed");
+                    }
+                } catch (Exception e) {
+                    System.err.println("Error closing browser: " + e.getMessage());
+                }
+            }
+            
+            log("✅ Test execution completed");
+            log("📋 Total steps logged: " + reportLogs.size());
         }
     }
 
-    public String takeScreenshot(String baseFilename) {
+    private static void waitFor(int seconds) {
         try {
-            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-            String filename = baseFilename + "_" + timestamp + ".png";
-            Path filepath = Paths.get(REPORT_DIR, filename);
+            log("⏳ Waiting " + seconds + " seconds...");
+            TimeUnit.SECONDS.sleep(seconds);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
 
-            // Directory banayein agar nahi hai
-            Files.createDirectories(Paths.get(REPORT_DIR));
-
-            File source = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
-            Files.copy(source.toPath(), filepath, StandardCopyOption.REPLACE_EXISTING);
-
-            System.out.println("📸 Screenshot Saved: " + filepath.toAbsolutePath());
-            return filepath.toAbsolutePath().toString();
-
+    private static void clickElement(By locator, String elementName) {
+        try {
+            WebElement element = wait.until(ExpectedConditions.elementToBeClickable(locator));
+            ((JavascriptExecutor) driver).executeScript(
+                "arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element);
+            Thread.sleep(500);
+            element.click();
+            log("✅ Clicked: " + elementName);
         } catch (Exception e) {
-            System.out.println("❌ Failed to take screenshot: " + e.getMessage());
+            log("⚠️ Standard click failed for " + elementName + ", trying JavaScript");
+            try {
+                WebElement element = driver.findElement(locator);
+                ((JavascriptExecutor) driver).executeScript("arguments[0].click();", element);
+                log("✅ Clicked (JS): " + elementName);
+            } catch (Exception ex) {
+                log("❌ Failed to click: " + elementName);
+                throw new RuntimeException("Could not click element: " + elementName, ex);
+            }
+        }
+    }
+
+    private static void clickElementJS(By locator, String elementName) {
+        try {
+            WebElement element = wait.until(ExpectedConditions.presenceOfElementLocated(locator));
+            ((JavascriptExecutor) driver).executeScript(
+                "arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element);
+            Thread.sleep(500);
+            ((JavascriptExecutor) driver).executeScript("arguments[0].click();", element);
+            log("✅ Clicked (JS): " + elementName);
+        } catch (Exception e) {
+            log("❌ JS click failed: " + elementName);
+            throw new RuntimeException("Could not click element: " + elementName, e);
+        }
+    }
+
+    private static String takeScreenshot(String fileName) {
+        try {
+            File screenshotDirFile = new File(screenshotDir);
+            screenshotDirFile.mkdirs();
+            
+            File srcFile = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+            File destFile = new File(screenshotDir + fileName + ".png");
+            FileHandler.copy(srcFile, destFile);
+            return destFile.getAbsolutePath();
+        } catch (Exception e) {
+            log("❌ Screenshot failed: " + e.getMessage());
             return null;
         }
     }
 
-    public void closeBrowser() {
-        if (driver != null) driver.quit();
+    private static void log(String message) {
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+        String logEntry = "[" + timestamp + "] " + message;
+        System.out.println(logEntry);
+        reportLogs.add(logEntry);
     }
 
-    /**
-     * API se mile plans ko console par ek formatted table mein print karta hai.
-     * @param plans API se mila JSONArray
-     */
-    public void printPlansToConsole(JSONArray plans) {
-        if (plans == null || plans.length() == 0) {
-            System.out.println("No plans to display in console.");
-            return;
-        }
-
-        // 1. Har column ki maximum width calculate karein
-        int maxName = "Plan Name".length();
-        int maxPrice = "Price".length();
-        int maxValidity = "Validity".length();
-
-        for (int i = 0; i < plans.length(); i++) {
-            JSONObject p = plans.getJSONObject(i);
-            String name = p.getString("plan_name");
-            String price = p.getString("plan_price");
-            String validity = p.getString("validity");
-
-            if (name.length() > maxName) maxName = name.length();
-            if (price.length() > maxPrice) maxPrice = price.length();
-            if (validity.length() > maxValidity) maxValidity = validity.length();
-        }
-
-        // 2. Format string banayein (e.g., "%-20s | %-10s | %-15s%n")
-        // Thoda extra padding (2)
-        maxName += 2;
-        maxPrice += 2;
-        maxValidity += 2;
-        String format = "%-" + maxName + "s | %-" + maxPrice + "s | %-" + maxValidity + "s%n";
-
-        System.out.println("\n========= DAMS Plans Console Report =========\n");
-
-        // 3. Header Print Karein
-        System.out.printf(format, "Plan Name", "Price", "Validity");
-
-        // 4. Separator Print Karein
-        int totalWidth = maxName + maxPrice + maxValidity + 6; // 6 for " | " * 2
-        System.out.println("-".repeat(totalWidth));
-
-        // 5. Data Print Karein
-        for (int i = 0; i < plans.length(); i++) {
-            JSONObject p = plans.getJSONObject(i);
-            System.out.printf(format,
-                p.getString("plan_name"),
-                p.getString("plan_price"),
-                p.getString("validity")
-            );
-        }
-        System.out.println("\n==============================================\n");
-    }
-
-
-    // =======================================================
-    //                 MAIN COMBINED FLOW
-    // =======================================================
-
-    public static void main(String[] args) throws Exception {
-
-        DamsAutomationFull full = new DamsAutomationFull();
-
-        System.out.println("\n==============================");
-        System.out.println("    STARTING FULL AUTOMATION");
-        System.out.println("==============================\n");
-
-        // 1️⃣ INIT BROWSER
-        full.initBrowser();
-
-        // 2️⃣ LOGIN SELENIUM
-        boolean loginWeb = full.loginToDamsSite();
-
-        if (!loginWeb) {
-            System.out.println("❌ Cannot continue. Login Failed.");
-            full.takeScreenshot("DAMS_Login_Failure"); // Screenshot lein failure par
-            full.closeBrowser();
-            return;
-        }
-        
-        // Login successful hone par screenshot
-        full.takeScreenshot("DAMS_Login_Success");
-
-        // 3️⃣ API CALL – Fetch Plans Report
-        System.out.println("📡 Fetching plans using OkHttp API...");
-
-        // === YEH SABSE ZAROORI BADLAAV HAI ===
-        // Token ko hardcode karne ke bajaaye Environment Variable se padhein
-        String hardToken = System.getenv("DAMS_JWT_TOKEN");
-
-        if (hardToken == null || hardToken.equals("PUT-YOUR-JWT-TOKEN-HERE") || hardToken.isEmpty()) {
-            System.out.println("❌ Error: DAMS_JWT_TOKEN environment variable not set.");
-            System.out.println("   Please set this as a GitHub Secret in your repository.");
-            full.closeBrowser();
-            return;
-        } else {
-             System.out.println("Token found successfully.");
-        }
-
+    private static Map<String, String> extractAuthFromStorage() {
+        Map<String, String> authMap = new HashMap<>();
         try {
-            JSONArray plans = full.getPlans(hardToken);
+            JavascriptExecutor js = (JavascriptExecutor) driver;
+
+            String jwt = (String) js.executeScript(
+                "return window.localStorage.getItem('jwt_token') || window.sessionStorage.getItem('jwt_token');");
+            String userId = (String) js.executeScript(
+                "return window.localStorage.getItem('id') || window.sessionStorage.getItem('id');");
+            String deviceToken = (String) js.executeScript(
+                "return window.localStorage.getItem('device_token') || window.sessionStorage.getItem('device_token');");
+            String timeStamp = (String) js.executeScript(
+                "return window.localStorage.getItem('time_stamp') || window.sessionStorage.getItem('time_stamp');");
+
+            if (jwt != null) {
+                authMap.put("jwt_token", jwt);
+                log("✅ JWT token found");
+            } else {
+                log("❌ JWT token not found");
+            }
             
-            // YAHAN NAYA METHOD CALL KIYA GAYA HAI
-            full.printPlansToConsole(plans); // Console par table print karega
+            authMap.put("user_id", USER_ID_OVERRIDE);
+            authMap.put("device_token", DEVICE_TOKEN_OVERRIDE);
             
-            full.generateHTML(plans); // Report generate karega ./reports/ folder mein
+            if (timeStamp != null && !timeStamp.trim().isEmpty()) {
+                authMap.put("time_stamp", timeStamp);
+            } else if (jwt != null) {
+                String payload = decodeJWTPayload(jwt);
+                String tsDateString = extractJsonValue(payload, "\"time[_sS]*stamp\"\\s*:\\s*\"([^\"]+)\"");
+                if (tsDateString != null) {
+                    String tsEpoch = toEpochMillis(tsDateString);
+                    authMap.put("time_stamp", tsEpoch);
+                } else {
+                    authMap.put("time_stamp", String.valueOf(System.currentTimeMillis()));
+                }
+            } else {
+                authMap.put("time_stamp", String.valueOf(System.currentTimeMillis()));
+            }
+
         } catch (Exception e) {
-            System.out.println("❌ Failed to get plans or generate report: " + e.getMessage());
-            e.printStackTrace();
+            log("⚠️ Auth extraction failed: " + e.getMessage());
         }
+        return authMap;
+    }
 
-        // 4️⃣ FINAL SCREENSHOT (Optional, kyunki success par pehle hi le liya hai)
-        // String screen = full.takeScreenshot("DAMS_Final_Capture");
-        // System.out.println("📸 Final Screenshot Saved: " + screen);
+    private static String decodeJWTPayload(String jwt) {
+        try {
+            String[] parts = jwt.split("\\.");
+            if (parts.length < 2) return null;
+            
+            String base64Payload = parts[1].replace('-', '+').replace('_', '/');
+            switch (base64Payload.length() % 4) {
+                case 0: break;
+                case 2: base64Payload += "=="; break;
+                case 3: base64Payload += "="; break;
+            }
+            
+            byte[] decoded = Base64.getDecoder().decode(base64Payload);
+            return new String(decoded, "UTF-8");
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
-        // 5️⃣ CLOSE BROWSER
-        full.closeBrowser();
+    private static String toEpochMillis(String dateTimeString) {
+        try {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            LocalDateTime localDateTime = LocalDateTime.parse(dateTimeString, formatter);
+            long epochMillis = localDateTime.atZone(ZoneId.of("UTC")).toInstant().toEpochMilli();
+            return String.valueOf(epochMillis);
+        } catch (Exception e) {
+            return String.valueOf(System.currentTimeMillis());
+        }
+    }
 
-        System.out.println("\n🎉 FULL AUTOMATION COMPLETED SUCCESSFULLY!");
+    private static String extractJsonValue(String text, String regex) {
+        if (text == null) return null;
+        try {
+            Pattern p = Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
+            Matcher m = p.matcher(text);
+            if (m.find()) return m.group(1);
+        } catch (Exception e) {
+            // Silent fail
+        }
+        return null;
+    }
+
+    private static String callPlanAPI(Map<String, String> auth) {
+        StringBuilder response = new StringBuilder();
+        try {
+            if (!auth.containsKey("jwt_token") || auth.get("jwt_token").isEmpty()) {
+                log("❌ Missing JWT token");
+                return "{\"status\":false,\"message\":\"Missing jwt_token\"}";
+            }
+
+            String jwt = auth.get("jwt_token");
+            String userId = auth.getOrDefault("user_id", USER_ID_OVERRIDE);
+            String deviceToken = auth.getOrDefault("device_token", DEVICE_TOKEN_OVERRIDE);
+            String timeStamp = auth.getOrDefault("time_stamp", String.valueOf(System.currentTimeMillis()));
+            
+            URL url = new URL(API_URL);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            
+            conn.setRequestProperty("Content-Type", "application/json"); 
+            conn.setRequestProperty("Accept", "application/json"); 
+            conn.setRequestProperty("Authorization", "Bearer " + jwt);
+            conn.setRequestProperty("user_id", userId);
+            conn.setRequestProperty("device_token", deviceToken);
+            conn.setRequestProperty("device_type", DEVICE_TYPE);
+            conn.setRequestProperty("time_stamp", timeStamp);
+            conn.setRequestProperty("stream_id", STREAM_ID);
+            conn.setRequestProperty("api_version", API_VERSION);
+            conn.setRequestProperty("device_info", DEVICE_INFO_MOCK);
+
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(15000);
+
+            String categoryId = "188";
+            String jsonInputString = String.format(
+                "{\"user_id\": \"%s\", \"cat_id\": \"%s\"}", 
+                userId, categoryId
+            );
+            
+            try (OutputStream os = conn.getOutputStream()) {
+                byte[] input = jsonInputString.getBytes("utf-8");
+                os.write(input, 0, input.length);
+            }
+
+            int status = conn.getResponseCode();
+            log("API Status: " + status);
+
+            InputStream is = (status >= 200 && status < 300) ? conn.getInputStream() : conn.getErrorStream();
+            
+            if (is != null) {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, "utf-8"))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) response.append(line);
+                }
+            }
+
+        } catch (Exception e) {
+            log("⚠️ API call failed: " + e.getMessage());
+            return "{\"status\":false,\"message\":\"" + e.getMessage() + "\"}";
+        }
+        return response.toString();
+    }
+
+    private static void generateHTMLReport(String apiResponse) {
+        try {
+            File reportDirFile = new File(reportDir);
+            reportDirFile.mkdirs();
+            
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            String htmlPath = reportDir + "DAMS_Report_" + timestamp + ".html";
+            
+            try (PrintWriter writer = new PrintWriter(new FileWriter(htmlPath))) {
+                writer.println("<!DOCTYPE html>");
+                writer.println("<html lang='en'><head>");
+                writer.println("<meta charset='UTF-8'>");
+                writer.println("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
+                writer.println("<title>DAMS Automation Report - " + timestamp + "</title>");
+                writer.println("<style>");
+                writer.println("* { margin: 0; padding: 0; box-sizing: border-box; }");
+                writer.println("body { font-family: system-ui, -apple-system, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }");
+                writer.println(".container { max-width: 1400px; margin: 0 auto; }");
+                writer.println(".header { background: white; border-radius: 16px; padding: 30px; margin-bottom: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); }");
+                writer.println(".header h1 { color: #2d3748; font-size: 28px; margin-bottom: 10px; }");
+                writer.println(".section { background: white; border-radius: 16px; padding: 25px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }");
+                writer.println(".section h2 { color: #2d3748; font-size: 20px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #e2e8f0; }");
+                writer.println(".log { background: #f7fafc; padding: 10px 15px; margin: 6px 0; border-radius: 6px; font-size: 13px; font-family: 'Courier New', monospace; border-left: 3px solid #cbd5e0; }");
+                writer.println(".log.success { border-left-color: #48bb78; background: #f0fff4; }");
+                writer.println(".log.warning { border-left-color: #ed8936; background: #fffaf0; }");
+                writer.println(".log.error { border-left-color: #f56565; background: #fff5f5; }");
+                writer.println(".api-response { background: #1a202c; color: #e2e8f0; padding: 20px; border-radius: 8px; overflow-x: auto; max-height: 600px; font-family: 'Courier New', monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; }");
+                writer.println(".stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }");
+                writer.println(".stat { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 20px; border-radius: 12px; text-align: center; }");
+                writer.println(".stat .value { font-size: 32px; font-weight: bold; }");
+                writer.println(".stat .label { font-size: 14px; opacity: 0.9; margin-top: 5px; }");
+                writer.println("</style>");
+                writer.println("</head><body>");
+                
+                writer.println("<div class='container'>");
+                writer.println("<div class='header'>");
+                writer.println("<h1>🎯 DAMS Automation Test Report</h1>");
+                writer.println("<p style='color: #718096;'>Generated: " + 
+                    LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) + "</p>");
+                writer.println("</div>");
+                
+                // Statistics
+                writer.println("<div class='section'>");
+                writer.println("<h2>📊 Execution Statistics</h2>");
+                writer.println("<div class='stats'>");
+                
+                long successCount = reportLogs.stream().filter(log -> log.contains("✅")).count();
+                long warningCount = reportLogs.stream().filter(log -> log.contains("⚠️")).count();
+                long errorCount = reportLogs.stream().filter(log -> log.contains("❌")).count();
+                
+                writer.println("<div class='stat'><div class='value'>" + reportLogs.size() + "</div><div class='label'>Total Logs</div></div>");
+                writer.println("<div class='stat'><div class='value'>" + successCount + "</div><div class='label'>Success</div></div>");
+                writer.println("<div class='stat'><div class='value'>" + warningCount + "</div><div class='label'>Warnings</div></div>");
+                writer.println("<div class='stat'><div class='value'>" + errorCount + "</div><div class='label'>Errors</div></div>");
+                writer.println("</div>");
+                writer.println("</div>");
+                
+                // Logs
+                writer.println("<div class='section'>");
+                writer.println("<h2>📝 Execution Logs</h2>");
+                for (String log : reportLogs) {
+                    String cssClass = "log";
+                    if (log.contains("✅")) cssClass += " success";
+                    else if (log.contains("⚠️")) cssClass += " warning";
+                    else if (log.contains("❌")) cssClass += " error";
+                    
+                    writer.println("<div class='" + cssClass + "'>" + escapeHtml(log) + "</div>");
+                }
+                writer.println("</div>");
+                
+                // API Response
+                writer.println("<div class='section'>");
+                writer.println("<h2>🔌 API Response</h2>");
+                writer.println("<pre class='api-response'>" + escapeHtml(formatJson(apiResponse)) + "</pre>");
+                writer.println("</div>");
+                
+                writer.println("</div>");
+                writer.println("</body></html>");
+            }
+            
+            System.out.println("✅ Report saved: " + htmlPath);
+        } catch (Exception e) {
+            System.err.println("❌ Report generation failed: " + e.getMessage());
+        }
+    }
+
+    private static String escapeHtml(String text) {
+        return text.replace("&", "&amp;")
+                   .replace("<", "&lt;")
+                   .replace(">", "&gt;")
+                   .replace("\"", "&quot;");
+    }
+
+    private static String formatJson(String json) {
+        try {
+            StringBuilder formatted = new StringBuilder();
+            int indent = 0;
+            boolean inQuotes = false;
+            
+            for (char c : json.toCharArray()) {
+                if (c == '"') inQuotes = !inQuotes;
+                
+                if (!inQuotes) {
+                    if (c == '{' || c == '[') {
+                        formatted.append(c).append('\n').append("  ".repeat(++indent));
+                    } else if (c == '}' || c == ']') {
+                        formatted.append('\n').append("  ".repeat(--indent)).append(c);
+                    } else if (c == ',') {
+                        formatted.append(c).append('\n').append("  ".repeat(indent));
+                    } else {
+                        formatted.append(c);
+                    }
+                } else {
+                    formatted.append(c);
+                }
+            }
+            return formatted.toString();
+        } catch (Exception e) {
+            return json;
+        }
+    }
+
+    private static int countOccurrences(String text, String pattern) {
+        int count = 0;
+        int index = 0;
+        while ((index = text.indexOf(pattern, index)) != -1) {
+            count++;
+            index += pattern.length();
+        }
+        return count;
     }
 }
