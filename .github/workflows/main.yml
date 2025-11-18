@@ -2,19 +2,11 @@ name: DAMS API Automation with Report
 
 on:
   workflow_dispatch:
-    inputs:
-      run_description:
-        description: 'Description of this run'
-        required: false
-        default: 'Manual execution'
   schedule:
     - cron: '0 9 * * *'
   push:
     branches:
       - main
-    paths:
-      - '**/*.java'
-      - '.github/workflows/**'
 
 permissions:
   contents: read
@@ -36,6 +28,7 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '11'
+          # REMOVED 'cache: maven' because you do not have a pom.xml
           
       - name: 🔧 Setup Chrome and ChromeDriver
         uses: browser-actions/setup-chrome@v1
@@ -46,8 +39,9 @@ jobs:
         run: |
           mkdir -p lib
           cd lib
+          echo "Downloading JARs..."
           
-          # Selenium 4.16.1 (More stable)
+          # Core Selenium & Dependencies
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-java/4.16.1/selenium-java-4.16.1.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-api/4.16.1/selenium-api-4.16.1.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-chrome-driver/4.16.1/selenium-chrome-driver-4.16.1.jar
@@ -59,7 +53,7 @@ jobs:
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-http/4.16.1/selenium-http-4.16.1.jar
           wget -q https://repo1.maven.org/maven2/org/seleniumhq/selenium/selenium-os/4.16.1/selenium-os-4.16.1.jar
           
-          # Common Dependencies
+          # Required Dependencies
           wget -q https://repo1.maven.org/maven2/com/google/guava/guava/32.1.3-jre/guava-32.1.3-jre.jar
           wget -q https://repo1.maven.org/maven2/com/google/guava/failureaccess/1.0.1/failureaccess-1.0.1.jar
           wget -q https://repo1.maven.org/maven2/org/asynchttpclient/async-http-client/2.12.3/async-http-client-2.12.3.jar
@@ -71,7 +65,7 @@ jobs:
           wget -q https://repo1.maven.org/maven2/com/google/auto/service/auto-service-annotations/1.1.1/auto-service-annotations-1.1.1.jar
           wget -q https://repo1.maven.org/maven2/net/bytebuddy/byte-buddy/1.14.10/byte-buddy-1.14.10.jar
           
-          echo "✅ Downloaded JAR files"
+          echo "✅ Dependencies Downloaded"
           
       - name: 📁 Create Directories
         run: |
@@ -81,7 +75,6 @@ jobs:
       - name: 🏗️ Compile Java Code
         run: |
           echo "🔨 Compiling..."
-          # Compile TestWithApi.java from root to 'compiled' folder
           javac -cp "lib/*" -d compiled TestWithApi.java
           
       - name: 🚀 Run Automation Test
@@ -89,31 +82,19 @@ jobs:
         continue-on-error: true
         run: |
           echo "▶️ Starting DAMS automation..."
-          # Run from compiled folder, referencing lib for dependencies
           java -cp "compiled:lib/*" TestWithApi
           
       - name: 📊 Check Results
         if: always()
         run: |
           echo "## 📊 Execution Summary" >> $GITHUB_STEP_SUMMARY
-          
-          if [ -d "test-report/screenshots" ]; then
-            count=$(find test-report/screenshots -name "*.png" | wc -l)
-            echo "- Screenshots: $count" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          if ls test-report/DAMS_Report_*.html 1> /dev/null 2>&1; then
-            echo "- Report Generated: ✅" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "- Report Generated: ❌" >> $GITHUB_STEP_SUMMARY
-          fi
+          ls test-report/DAMS_Report_*.html && echo "- Report Generated: ✅" >> $GITHUB_STEP_SUMMARY || echo "- Report Generated: ❌" >> $GITHUB_STEP_SUMMARY
 
       - name: 📦 Prepare GitHub Pages
         if: always()
         run: |
-          mkdir -p github-pages-content/screenshots
-          cp test-report/DAMS_Report_*.html github-pages-content/ 2>/dev/null || echo "<h1>No Report</h1>" > github-pages-content/index.html
-          cp test-report/screenshots/*.png github-pages-content/screenshots/ 2>/dev/null || true
+          mkdir -p github-pages-content
+          cp test-report/DAMS_Report_*.html github-pages-content/index.html 2>/dev/null || echo "<h1>No Report</h1>" > github-pages-content/index.html
 
       - name: 📤 Upload Pages Artifact
         if: always()
