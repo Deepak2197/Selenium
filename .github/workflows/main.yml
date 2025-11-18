@@ -1,4 +1,4 @@
-name: DAMS API Automation with Report
+name: DAMS API Automation
 
 on:
   workflow_dispatch:
@@ -12,7 +12,6 @@ permissions:
   contents: read
   pages: write
   id-token: write
-  actions: read
 
 jobs:
   automation:
@@ -28,9 +27,9 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '11'
-          # REMOVED 'cache: maven' because you do not have a pom.xml
+          # REMOVED 'cache: maven' to fix the pom.xml error
           
-      - name: 🔧 Setup Chrome and ChromeDriver
+      - name: 🔧 Setup Chrome
         uses: browser-actions/setup-chrome@v1
         with:
           chrome-version: stable
@@ -65,8 +64,6 @@ jobs:
           wget -q https://repo1.maven.org/maven2/com/google/auto/service/auto-service-annotations/1.1.1/auto-service-annotations-1.1.1.jar
           wget -q https://repo1.maven.org/maven2/net/bytebuddy/byte-buddy/1.14.10/byte-buddy-1.14.10.jar
           
-          echo "✅ Dependencies Downloaded"
-          
       - name: 📁 Create Directories
         run: |
           mkdir -p compiled
@@ -75,6 +72,7 @@ jobs:
       - name: 🏗️ Compile Java Code
         run: |
           echo "🔨 Compiling..."
+          # Assuming TestWithApi.java is in the ROOT directory
           javac -cp "lib/*" -d compiled TestWithApi.java
           
       - name: 🚀 Run Automation Test
@@ -82,37 +80,22 @@ jobs:
         continue-on-error: true
         run: |
           echo "▶️ Starting DAMS automation..."
+          # Run using the default package (no folder path needed in class name)
           java -cp "compiled:lib/*" TestWithApi
           
-      - name: 📊 Check Results
+      - name: 📊 Execution Summary
         if: always()
         run: |
-          echo "## 📊 Execution Summary" >> $GITHUB_STEP_SUMMARY
-          ls test-report/DAMS_Report_*.html && echo "- Report Generated: ✅" >> $GITHUB_STEP_SUMMARY || echo "- Report Generated: ❌" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 Summary" >> $GITHUB_STEP_SUMMARY
+          if ls test-report/DAMS_Report_*.html 1> /dev/null 2>&1; then
+            echo "✅ Report Generated" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ No Report Found" >> $GITHUB_STEP_SUMMARY
+          fi
 
-      - name: 📦 Prepare GitHub Pages
+      - name: 📤 Upload Artifacts
         if: always()
-        run: |
-          mkdir -p github-pages-content
-          cp test-report/DAMS_Report_*.html github-pages-content/index.html 2>/dev/null || echo "<h1>No Report</h1>" > github-pages-content/index.html
-
-      - name: 📤 Upload Pages Artifact
-        if: always()
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          path: ./github-pages-content
-
-  deploy:
-    needs: automation
-    runs-on: ubuntu-latest
-    if: always() && github.ref == 'refs/heads/main'
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: 🚀 Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          name: test-results
+          path: test-report/
