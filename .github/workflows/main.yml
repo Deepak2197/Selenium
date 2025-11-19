@@ -27,7 +27,7 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '11'
-          # REMOVED 'cache: maven' to fix the pom.xml error
+          # No cache parameter - we're not using Maven/Gradle
           
       - name: 🔧 Setup Chrome
         uses: browser-actions/setup-chrome@v1
@@ -64,38 +64,75 @@ jobs:
           wget -q https://repo1.maven.org/maven2/com/google/auto/service/auto-service-annotations/1.1.1/auto-service-annotations-1.1.1.jar
           wget -q https://repo1.maven.org/maven2/net/bytebuddy/byte-buddy/1.14.10/byte-buddy-1.14.10.jar
           
+          echo "✅ All dependencies downloaded"
+          ls -lh
+          
       - name: 📁 Create Directories
         run: |
           mkdir -p compiled
           mkdir -p test-report/screenshots
+          echo "✅ Directories created"
           
       - name: 🏗️ Compile Java Code
         run: |
-          echo "🔨 Compiling..."
-          # Assuming TestWithApi.java is in the ROOT directory
+          echo "🔨 Compiling TestWithApi.java..."
           javac -cp "lib/*" -d compiled TestWithApi.java
+          echo "✅ Compilation successful"
+          ls -la compiled/
           
       - name: 🚀 Run Automation Test
         id: run_test
         continue-on-error: true
         run: |
           echo "▶️ Starting DAMS automation..."
-          # Run using the default package (no folder path needed in class name)
           java -cp "compiled:lib/*" TestWithApi
+          TEST_EXIT_CODE=$?
+          echo "test_exit_code=$TEST_EXIT_CODE" >> $GITHUB_OUTPUT
+          exit $TEST_EXIT_CODE
           
       - name: 📊 Execution Summary
         if: always()
         run: |
-          echo "## 📊 Summary" >> $GITHUB_STEP_SUMMARY
-          if ls test-report/DAMS_Report_*.html 1> /dev/null 2>&1; then
-            echo "✅ Report Generated" >> $GITHUB_STEP_SUMMARY
+          echo "## 📊 Automation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.run_test.outputs.test_exit_code }}" == "0" ]; then
+            echo "### ✅ Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
           else
-            echo "❌ No Report Found" >> $GITHUB_STEP_SUMMARY
+            echo "### ❌ Status: FAILED" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if ls test-report/DAMS_Report_*.html 1> /dev/null 2>&1; then
+            echo "- ✅ Report Generated" >> $GITHUB_STEP_SUMMARY
+            echo "- 📄 Report files:" >> $GITHUB_STEP_SUMMARY
+            for file in test-report/DAMS_Report_*.html; do
+              echo "  - $(basename $file)" >> $GITHUB_STEP_SUMMARY
+            done
+          else
+            echo "- ❌ No Report Found" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if ls test-report/screenshots/*.png 1> /dev/null 2>&1; then
+            echo "- 📸 Screenshots captured: $(ls test-report/screenshots/*.png | wc -l)" >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: 📤 Upload Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: test-results-${{ github.run_number }}
           path: test-report/
+          retention-days: 30
+          
+      - name: 🎯 Final Status
+        if: always()
+        run: |
+          if [ "${{ steps.run_test.outputs.test_exit_code }}" != "0" ]; then
+            echo "❌ Automation execution FAILED!"
+            echo "Please check the logs and artifacts for details."
+            exit 1
+          else
+            echo "✅ Automation execution SUCCESSFUL!"
+          fi
