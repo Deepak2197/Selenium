@@ -18,15 +18,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Build & Run Tests
-        run: mvn clean test
-        working-directory: <PUT_CORRECT_FOLDER_HERE>
+      # 🔍 TEMPORARY STEP: Find pom.xml
+      - name: Find pom.xml in repo
+        run: |
+          echo "Searching for pom.xml..."
+          find . -name "pom.xml"
 
-      - name: Upload Test Reports
-        uses: actions/upload-artifact@v4
-        with:
-          name: selenium-reports
-          path: |
-            <PUT_CORRECT_FOLDER_HERE>/target/surefire-reports/*.html
-            <PUT_CORRECT_FOLDER_HERE>/target/surefire-reports/*.xml
-            <PUT_CORRECT_FOLDER_HERE>/reports/*.png
+      # ❌ DO NOT RUN TESTS UNTIL WE KNOW PATH
+      - name: Skip test until pom location known
+        run: echo "Waiting for pom.xml location"
