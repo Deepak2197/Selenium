@@ -42,6 +42,9 @@ public class TestWithApi {
         log("🚀 DAMS Automation Started");
         log("Environment: " + (System.getenv("CI") != null ? "GitHub Actions (CI)" : "Local"));
         
+        String apiResponse = null;
+        Map<String, Object> apiParsedData = new HashMap<>();
+        
         try {
             // Setup Chrome Options
             ChromeOptions options = new ChromeOptions();
@@ -181,20 +184,23 @@ public class TestWithApi {
 
             // --- STEP 7: API Call ---
             log("🌐 STEP 7: Calling API");
-            String apiResponse = callPlanAPI(authHeaders);
+            apiResponse = callPlanAPI(authHeaders);
             
-            if (apiResponse.contains("\"status\":true")) {
+            if (apiResponse != null && apiResponse.contains("\"status\":true")) {
                 log("✅ API call successful");
                 int planCount = countOccurrences(apiResponse, "\"id\":");
                 log("📊 Plans retrieved: " + planCount);
+                
+                // Parse API data for structured display
+                apiParsedData = parseApiResponse(apiResponse);
             } else {
                 log("⚠️ API response indicates an issue");
             }
 
-            // --- STEP 8: Generate Report ---
-            log("📝 STEP 8: Generating HTML report");
-            generateHTMLReport(apiResponse);
-            log("✅ Report generated successfully");
+            // --- STEP 8: Generate Merged Report ---
+            log("📝 STEP 8: Generating comprehensive HTML report");
+            generateMergedHTMLReport(apiResponse, apiParsedData);
+            log("✅ Comprehensive report generated successfully");
 
         } catch (Exception e) {
             log("❌ FATAL ERROR: " + e.getMessage());
@@ -202,8 +208,8 @@ public class TestWithApi {
             takeScreenshot("FatalError");
             
             try {
-                generateHTMLReport("{\"status\":false,\"message\":\"Fatal error: " + 
-                    e.getMessage().replaceAll("\"", "'") + "\"}");
+                generateMergedHTMLReport("{\"status\":false,\"message\":\"Fatal error: " + 
+                    e.getMessage().replaceAll("\"", "'") + "\"}", new HashMap<>());
             } catch (Exception reportError) {
                 System.err.println("Could not generate error report: " + reportError.getMessage());
             }
@@ -440,66 +446,143 @@ public class TestWithApi {
         return response.toString();
     }
 
-    private static void generateHTMLReport(String apiResponse) {
+    private static Map<String, Object> parseApiResponse(String jsonResponse) {
+        Map<String, Object> parsedData = new HashMap<>();
+        try {
+            // Simple JSON parsing without external libraries
+            parsedData.put("status", jsonResponse.contains("\"status\":true"));
+            parsedData.put("planCount", countOccurrences(jsonResponse, "\"id\":"));
+            parsedData.put("rawResponse", jsonResponse);
+            
+            // Extract key fields
+            String message = extractJsonValue(jsonResponse, "\"message\"\\s*:\\s*\"([^\"]+)\"");
+            if (message != null) {
+                parsedData.put("message", message);
+            }
+            
+        } catch (Exception e) {
+            log("⚠️ Error parsing API response: " + e.getMessage());
+        }
+        return parsedData;
+    }
+
+    private static void generateMergedHTMLReport(String apiResponse, Map<String, Object> apiParsedData) {
         try {
             File reportDirFile = new File(reportDir);
             reportDirFile.mkdirs();
             
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-            String htmlPath = reportDir + "DAMS_Report_" + timestamp + ".html";
+            String htmlPath = reportDir + "DAMS_Comprehensive_Report_" + timestamp + ".html";
             
             try (PrintWriter writer = new PrintWriter(new FileWriter(htmlPath))) {
                 writer.println("<!DOCTYPE html>");
                 writer.println("<html lang='en'><head>");
                 writer.println("<meta charset='UTF-8'>");
                 writer.println("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
-                writer.println("<title>DAMS Automation Report - " + timestamp + "</title>");
+                writer.println("<title>DAMS Comprehensive Automation Report - " + timestamp + "</title>");
                 writer.println("<style>");
                 writer.println("* { margin: 0; padding: 0; box-sizing: border-box; }");
                 writer.println("body { font-family: system-ui, -apple-system, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }");
                 writer.println(".container { max-width: 1400px; margin: 0 auto; }");
                 writer.println(".header { background: white; border-radius: 16px; padding: 30px; margin-bottom: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.1); }");
-                writer.println(".header h1 { color: #2d3748; font-size: 28px; margin-bottom: 10px; }");
+                writer.println(".header h1 { color: #2d3748; font-size: 32px; margin-bottom: 10px; }");
+                writer.println(".header .subtitle { color: #718096; font-size: 16px; }");
                 writer.println(".section { background: white; border-radius: 16px; padding: 25px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }");
-                writer.println(".section h2 { color: #2d3748; font-size: 20px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #e2e8f0; }");
-                writer.println(".log { background: #f7fafc; padding: 10px 15px; margin: 6px 0; border-radius: 6px; font-size: 13px; font-family: 'Courier New', monospace; border-left: 3px solid #cbd5e0; }");
+                writer.println(".section h2 { color: #2d3748; font-size: 22px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #e2e8f0; display: flex; align-items: center; gap: 10px; }");
+                writer.println(".log { background: #f7fafc; padding: 12px 15px; margin: 6px 0; border-radius: 8px; font-size: 13px; font-family: 'Courier New', monospace; border-left: 3px solid #cbd5e0; transition: all 0.2s; }");
+                writer.println(".log:hover { background: #edf2f7; transform: translateX(5px); }");
                 writer.println(".log.success { border-left-color: #48bb78; background: #f0fff4; }");
                 writer.println(".log.warning { border-left-color: #ed8936; background: #fffaf0; }");
                 writer.println(".log.error { border-left-color: #f56565; background: #fff5f5; }");
                 writer.println(".api-response { background: #1a202c; color: #e2e8f0; padding: 20px; border-radius: 8px; overflow-x: auto; max-height: 600px; font-family: 'Courier New', monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; }");
-                writer.println(".stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; }");
-                writer.println(".stat { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 20px; border-radius: 12px; text-align: center; }");
-                writer.println(".stat .value { font-size: 32px; font-weight: bold; }");
-                writer.println(".stat .label { font-size: 14px; opacity: 0.9; margin-top: 5px; }");
+                writer.println(".stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }");
+                writer.println(".stat { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 25px; border-radius: 12px; text-align: center; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); }");
+                writer.println(".stat .value { font-size: 36px; font-weight: bold; margin-bottom: 5px; }");
+                writer.println(".stat .label { font-size: 14px; opacity: 0.9; }");
+                writer.println(".api-table { width: 100%; border-collapse: collapse; margin-top: 15px; }");
+                writer.println(".api-table th { background: #4299e1; color: white; padding: 12px; text-align: left; font-weight: 600; }");
+                writer.println(".api-table td { padding: 12px; border-bottom: 1px solid #e2e8f0; }");
+                writer.println(".api-table tr:hover { background: #f7fafc; }");
+                writer.println(".badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }");
+                writer.println(".badge-success { background: #c6f6d5; color: #22543d; }");
+                writer.println(".badge-error { background: #fed7d7; color: #742a2a; }");
+                writer.println(".info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-top: 15px; }");
+                writer.println(".info-card { background: #f7fafc; padding: 15px; border-radius: 8px; border-left: 4px solid #4299e1; }");
+                writer.println(".info-card .label { font-size: 12px; color: #718096; text-transform: uppercase; margin-bottom: 5px; }");
+                writer.println(".info-card .value { font-size: 16px; color: #2d3748; font-weight: 600; }");
                 writer.println("</style>");
                 writer.println("</head><body>");
                 
                 writer.println("<div class='container'>");
+                
+                // Header
                 writer.println("<div class='header'>");
-                writer.println("<h1>🎯 DAMS Automation Test Report</h1>");
-                writer.println("<p style='color: #718096;'>Generated: " + 
+                writer.println("<h1>🎯 DAMS Comprehensive Automation Report</h1>");
+                writer.println("<p class='subtitle'>Selenium Test Execution + API Data Analysis</p>");
+                writer.println("<p class='subtitle'>Generated: " + 
                     LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) + "</p>");
                 writer.println("</div>");
                 
-                // Statistics
+                // Statistics Section
                 writer.println("<div class='section'>");
-                writer.println("<h2>📊 Execution Statistics</h2>");
+                writer.println("<h2>📊 Execution Summary</h2>");
                 writer.println("<div class='stats'>");
                 
                 long successCount = reportLogs.stream().filter(log -> log.contains("✅")).count();
                 long warningCount = reportLogs.stream().filter(log -> log.contains("⚠️")).count();
                 long errorCount = reportLogs.stream().filter(log -> log.contains("❌")).count();
+                int planCount = apiParsedData.containsKey("planCount") ? (int) apiParsedData.get("planCount") : 0;
                 
                 writer.println("<div class='stat'><div class='value'>" + reportLogs.size() + "</div><div class='label'>Total Logs</div></div>");
-                writer.println("<div class='stat'><div class='value'>" + successCount + "</div><div class='label'>Success</div></div>");
-                writer.println("<div class='stat'><div class='value'>" + warningCount + "</div><div class='label'>Warnings</div></div>");
-                writer.println("<div class='stat'><div class='value'>" + errorCount + "</div><div class='label'>Errors</div></div>");
+                writer.println("<div class='stat'><div class='value'>" + successCount + "</div><div class='label'>✅ Success</div></div>");
+                writer.println("<div class='stat'><div class='value'>" + warningCount + "</div><div class='label'>⚠️ Warnings</div></div>");
+                writer.println("<div class='stat'><div class='value'>" + errorCount + "</div><div class='label'>❌ Errors</div></div>");
+                writer.println("<div class='stat'><div class='value'>" + planCount + "</div><div class='label'>📦 Plans Found</div></div>");
                 writer.println("</div>");
                 writer.println("</div>");
                 
-                // Logs
+                // Test Information
                 writer.println("<div class='section'>");
-                writer.println("<h2>📝 Execution Logs</h2>");
+                writer.println("<h2>ℹ️ Test Information</h2>");
+                writer.println("<div class='info-grid'>");
+                writer.println("<div class='info-card'>");
+                writer.println("<div class='label'>API Endpoint</div>");
+                writer.println("<div class='value'>" + API_URL + "</div>");
+                writer.println("</div>");
+                writer.println("<div class='info-card'>");
+                writer.println("<div class='label'>Environment</div>");
+                writer.println("<div class='value'>" + (System.getenv("CI") != null ? "GitHub Actions (CI)" : "Local") + "</div>");
+                writer.println("</div>");
+                writer.println("<div class='info-card'>");
+                writer.println("<div class='label'>Test Status</div>");
+                writer.println("<div class='value'>" + (errorCount == 0 ? 
+                    "<span class='badge badge-success'>PASSED</span>" : 
+                    "<span class='badge badge-error'>FAILED</span>") + "</div>");
+                writer.println("</div>");
+                writer.println("</div>");
+                writer.println("</div>");
+                
+                // API Data Section
+                writer.println("<div class='section'>");
+                writer.println("<h2>🔌 API Response Analysis</h2>");
+                
+                if (apiResponse != null && !apiResponse.isEmpty()) {
+                    boolean apiSuccess = apiResponse.contains("\"status\":true");
+                    writer.println("<p><strong>Status:</strong> " + 
+                        (apiSuccess ? "<span class='badge badge-success'>SUCCESS</span>" : 
+                                     "<span class='badge badge-error'>FAILED</span>") + "</p>");
+                    writer.println("<p><strong>Plans Retrieved:</strong> " + planCount + "</p>");
+                    
+                    writer.println("<h3 style='margin-top: 20px; color: #2d3748;'>Raw JSON Response:</h3>");
+                    writer.println("<pre class='api-response'>" + escapeHtml(formatJson(apiResponse)) + "</pre>");
+                } else {
+                    writer.println("<p style='color: #e53e3e;'>⚠️ No API response available</p>");
+                }
+                writer.println("</div>");
+                
+                // Execution Logs
+                writer.println("<div class='section'>");
+                writer.println("<h2>📝 Detailed Execution Logs</h2>");
                 for (String log : reportLogs) {
                     String cssClass = "log";
                     if (log.contains("✅")) cssClass += " success";
@@ -510,19 +593,20 @@ public class TestWithApi {
                 }
                 writer.println("</div>");
                 
-                // API Response
-                writer.println("<div class='section'>");
-                writer.println("<h2>🔌 API Response</h2>");
-                writer.println("<pre class='api-response'>" + escapeHtml(formatJson(apiResponse)) + "</pre>");
+                // Footer
+                writer.println("<div class='section' style='text-align: center; color: #718096;'>");
+                writer.println("<p>Generated by DAMS Selenium Automation Framework</p>");
+                writer.println("<p style='font-size: 12px; margin-top: 5px;'>Report ID: " + timestamp + "</p>");
                 writer.println("</div>");
                 
                 writer.println("</div>");
                 writer.println("</body></html>");
             }
             
-            System.out.println("✅ Report saved: " + htmlPath);
+            System.out.println("✅ Comprehensive report saved: " + htmlPath);
         } catch (Exception e) {
             System.err.println("❌ Report generation failed: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
