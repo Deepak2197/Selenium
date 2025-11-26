@@ -7,30 +7,43 @@ on:
 jobs:
   run-selenium-tests:
     runs-on: ubuntu-latest
-
+    
     steps:
       # 1. Checkout Code
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      # 2. Setup Java 17
+      
+      # 2. List directory contents to debug
+      - name: List Repository Structure
+        run: |
+          echo "Current directory:"
+          pwd
+          echo "Directory contents:"
+          ls -la
+          echo "Looking for pom.xml:"
+          find . -name "pom.xml" -type f
+      
+      # 3. Setup Java 17
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-
-      # 3. Build & Run Selenium Tests
+      
+      # 4. Build & Run Selenium Tests
       - name: Build & Run Tests
         run: mvn clean test
-        working-directory: .   # Change if pom.xml is inside a subfolder
-
-      # 4. Upload Test Reports
+        # Update working-directory based on where your pom.xml is located
+        # If pom.xml is in root, use: working-directory: .
+        # If it's in a subfolder like 'selenium-tests', use: working-directory: selenium-tests
+      
+      # 5. Upload Test Reports (runs even if tests fail)
       - name: Upload Test Reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: selenium-reports
           path: |
-            target/surefire-reports/*.html
-            target/surefire-reports/*.xml
-            reports/*.png
+            target/surefire-reports/
+            reports/
+          if-no-files-found: warn
